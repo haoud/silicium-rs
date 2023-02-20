@@ -1,0 +1,20 @@
+[package]
+name = "silicium-rs"
+version = "0.1.0"
+edition = "2021"
+
+[workspaces]
+members = ["crates/*"]
+
+[dependencies]
+silicium-internal = { path = "crates/silicium-internal" }
+bitfield = "0.14.0"
+bitflags = "1.3.2"
+limine = "0.1.10"
+log = "0.4.17"
+spin = "0.9.5"
+
+[[bin]]
+name = "silicium-rs"
+test = false
+bench = false

@@ -1,0 +1,7 @@
+[package]
+name = "silicium-internal"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+silicium-x86_64 = { path = "../silicium-x86_64" }
