@@ -1,1 +1,1 @@
-pub use crate::x86_64::prelude::*;
+pub use crate::{sync::prelude::*, x86_64::prelude::*};

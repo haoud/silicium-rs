@@ -1,8 +1,8 @@
 use crate::x86_64::gdt;
 use crate::x86_64::segment;
-use spin::Mutex;
+use crate::sync::spin::Spinlock;
 
-static GDT: Mutex<gdt::Table<256>> = Mutex::new(gdt::Table::new());
+static GDT: Spinlock<gdt::Table<256>> = Spinlock::new(gdt::Table::new());
 
 /// Setup the GDT and load it into the CPU. The GDT created by this function is a classic `x86_64`
 /// GDT, with 5 entries:
@@ -21,7 +21,7 @@ pub fn setup() {
     gdt.set(4, gdt::Descriptor::USER_DATA);
     gdt.flush();
     unsafe {
-        segment::reload(segment::KERNEL_CODE64, segment::KERNEL_DATA);
+        segment::reload(&segment::KERNEL_CODE64, &segment::KERNEL_DATA);
     }
 }
 
@@ -30,6 +30,6 @@ pub fn setup() {
 pub fn reload() {
     GDT.lock().flush();
     unsafe {
-        segment::reload(segment::KERNEL_CODE64, segment::KERNEL_DATA);
+        segment::reload(&segment::KERNEL_CODE64, &segment::KERNEL_DATA);
     }
 }

@@ -1,11 +1,11 @@
 use crate::x86_64::serial::{Port, Serial};
+use crate::sync::spin::SpinlockIrq;
 use core::fmt::Write;
-use spin::Mutex;
 
 pub struct SiliciumLogger;
 
 pub static LOGGER: SiliciumLogger = SiliciumLogger;
-static SERIAL: Mutex<Serial> = Mutex::new(Serial::new(Port::COM1));
+static SERIAL: SpinlockIrq<Serial> = SpinlockIrq::new(Serial::new(Port::COM1));
 
 impl log::Log for SiliciumLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {

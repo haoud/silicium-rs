@@ -73,6 +73,15 @@ dependencies = [
 name = "silicium-internal"
 version = "0.1.0"
 dependencies = [
+ "silicium-sync",
+ "silicium-x86_64",
+]
+
+[[package]]
+name = "silicium-sync"
+version = "0.1.0"
+dependencies = [
+ "lock_api",
  "silicium-x86_64",
 ]
 

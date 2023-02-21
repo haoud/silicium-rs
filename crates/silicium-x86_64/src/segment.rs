@@ -122,7 +122,7 @@ impl SS {
 
 /// Reload the code, data and stack segment registers with the given selectors. FS and GS are not
 /// reloaded because they are used for the TLS and need to be handled separately with MSRs.
-pub unsafe fn reload(code: Selector, data: Selector) {
+pub unsafe fn reload(code: &Selector, data: &Selector) {
     DS::write(data.0);
     ES::write(data.0);
     SS::write(data.0);

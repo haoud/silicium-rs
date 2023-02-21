@@ -1,8 +1,5 @@
 use core::arch::asm;
 
-#[repr(transparent)]
-pub struct State(bool);
-
 /// Waits for an interrupt. If interrupts are disabled, this function will never return, so be
 /// careful when using it.
 pub fn wait_for() {
@@ -27,18 +24,18 @@ pub fn enable() {
 
 /// Returns the current interrupt state.
 #[must_use]
-pub fn enabled() -> State {
+pub fn enabled() -> bool {
     let flags: u64;
     unsafe {
         asm!("pushfq
               pop {}", out(reg) flags);
     }
-    State(flags & (1 << 9) != 0)
+    flags & (1 << 9) != 0
 }
 
 /// Restores a previous interrupt state.
-pub fn restore(state: State) {
-    if state.0 {
+pub fn restore(state: bool) {
+    if state {
         enable();
     } else {
         disable();
