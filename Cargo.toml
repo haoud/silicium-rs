@@ -1,9 +1,9 @@
 [package]
-name = "silicium-rs"
+name = "silicium"
 version = "0.1.0"
 edition = "2021"
 
-[workspaces]
+[workspace]
 members = ["crates/*"]
 
 [dependencies]
@@ -15,6 +15,6 @@ log = "0.4.17"
 spin = "0.9.5"
 
 [[bin]]
-name = "silicium-rs"
+name = "silicium"
 test = false
 bench = false

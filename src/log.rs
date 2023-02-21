@@ -11,7 +11,7 @@ impl log::Log for SiliciumLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= log::max_level()
     }
-    
+
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             let level = match record.level() {

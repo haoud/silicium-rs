@@ -3,14 +3,14 @@ use core::marker::PhantomData;
 
 pub trait IO {
     /// Write a value to a port.
-    /// 
+    ///
     /// # Safety
     /// This function is unsafe because writing to a port can have side effects, including
     /// causing the hardware to do something unexpected and possibly violating memory safety.
     unsafe fn write(port: u16, value: Self);
 
     /// Read a value from a port.
-    /// 
+    ///
     /// # Safety
     /// This function is unsafe because reading from a port can have side effects, including
     /// causing the hardware to do something unexpected and possibly violating memory safety.
@@ -19,11 +19,14 @@ pub trait IO {
     /// Write a value to a port, then pause for a short time. This is useful for
     /// writing to ports that require a short delay after writing in order to let
     /// enough time pass for the hardware to process the write.
-    /// 
+    ///
     /// # Safety
     /// This function is unsafe because writing to a port can have side effects, including
     /// causing the hardware to do something unexpected and possibly violating memory safety.
-    unsafe fn write_and_pause(port: u16, value: Self) where Self: Sized {
+    unsafe fn write_and_pause(port: u16, value: Self)
+    where
+        Self: Sized,
+    {
         Self::write(port, value);
         pause();
     }

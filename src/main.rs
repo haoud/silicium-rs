@@ -9,8 +9,9 @@
 #![feature(core_intrinsics)]
 
 use ::log::info;
-pub use silicium_internal::x86_64;
+pub use silicium_internal::*;
 
+pub mod arch;
 pub mod glue;
 pub mod log;
 
@@ -18,6 +19,7 @@ pub mod log;
 pub unsafe extern "C" fn start() -> ! {
     log::init();
     info!("Booting Silicium...");
+    arch::init_bsp();
     info!("Silicium booted successfully!");
     x86_64::cpu::freeze();
 }

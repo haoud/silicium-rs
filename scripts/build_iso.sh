@@ -16,12 +16,12 @@ cp -v                                   \
     iso/boot/
 
 # Copy the kernel
-cp target/x86_64/debug/silicium-rs iso/boot/silicium.elf
+cp target/x86_64/debug/silicium iso/boot/silicium.elf
 
 # Create the ISO
 xorriso -as mkisofs -b boot/limine-cd.bin                   \
         -no-emul-boot -boot-load-size 4 -boot-info-table 	\
         --efi-boot boot/limine-cd-efi.bin 					\
         -efi-boot-part --efi-boot-image  					\
-        --protective-msdos-label iso -o bin/silicium-rs.iso
-    ./bin/src/limine/limine-deploy bin/silicium-rs.iso
+        --protective-msdos-label iso -o bin/silicium.iso
+    ./bin/src/limine/limine-deploy bin/silicium.iso
