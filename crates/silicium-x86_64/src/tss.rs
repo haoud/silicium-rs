@@ -11,6 +11,8 @@ pub struct TaskStateSegment {
 }
 
 impl TaskStateSegment {
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub const fn new() -> Self {
         Self {
             reserved_1: 0,
@@ -23,6 +25,7 @@ impl TaskStateSegment {
         }
     }
 
+    #[must_use]
     pub const fn as_ptr(&self) -> *const Self {
         self as *const Self
     }

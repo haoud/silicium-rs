@@ -16,12 +16,12 @@ static GDT: Spinlock<gdt::Table<6>> = Spinlock::new(gdt::Table::new());
 /// - TSS descriptor
 pub fn setup() {
     let mut gdt = GDT.lock();
-    gdt.set(0, gdt::Descriptor::NULL);
-    gdt.set(1, gdt::Descriptor::KERNEL_CODE64);
-    gdt.set(2, gdt::Descriptor::KERNEL_DATA);
-    gdt.set(3, gdt::Descriptor::USER_CODE64);
-    gdt.set(4, gdt::Descriptor::USER_DATA);
-    gdt.set(5, gdt::Descriptor::tss(&TSS.lock()));
+    gdt.set(0, &gdt::Descriptor::NULL);
+    gdt.set(1, &gdt::Descriptor::KERNEL_CODE64);
+    gdt.set(2, &gdt::Descriptor::KERNEL_DATA);
+    gdt.set(3, &gdt::Descriptor::USER_CODE64);
+    gdt.set(4, &gdt::Descriptor::USER_DATA);
+    gdt.set(5, &gdt::Descriptor::tss(&TSS.lock()));
     gdt.flush();
     unsafe {
         segment::reload(

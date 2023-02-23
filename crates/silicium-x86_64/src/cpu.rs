@@ -105,7 +105,7 @@ pub unsafe fn hlt() {
 /// This function is unsafe because it can cause undefined behavior if the given
 /// gdtr is not a valid GDT register.
 #[inline]
-pub unsafe fn lgdt(gdtr: *const u64) {
+pub unsafe fn lgdt(gdtr: u64) {
     asm!("lgdt [{}]", in(reg) gdtr, options(readonly, nostack, preserves_flags));
 }
 
@@ -116,8 +116,7 @@ pub unsafe fn lgdt(gdtr: *const u64) {
 /// This function is unsafe because it can cause undefined behavior if the given
 /// idtr is not a valid IDT register.
 #[inline]
-
-pub unsafe fn lidt(idtr: *const u64) {
+pub unsafe fn lidt(idtr: u64) {
     asm!("lidt [{}]", in(reg) idtr, options(readonly, nostack, preserves_flags));
 }
 

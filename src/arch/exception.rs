@@ -38,6 +38,7 @@ pub fn setup() {
     register_exception_handler(31, reserved_8);
 }
 
+#[allow(clippy::fn_to_numeric_cast)]
 fn register_exception_handler(index: u8, handler: unsafe extern "C" fn()) {
     let mut idt = crate::arch::idt::IDT.lock();
     let flags = DescriptorFlags::new()

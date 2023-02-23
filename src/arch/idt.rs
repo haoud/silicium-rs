@@ -17,10 +17,13 @@ pub fn setup() {
             .present(true)
             .build();
         let descriptor = Descriptor::new()
-            .set_handler_addr(unknown_interrupt as u64)
+            .set_handler_addr(unknown_interrupt as usize as u64)
             .set_options(flags)
             .build();
-        idt.set_descriptor(i as u8, descriptor);
+        idt.set_descriptor(
+            u8::try_from(i).expect("IDT index should fit in u8"),
+            descriptor,
+        );
     }
     idt.load();
 }

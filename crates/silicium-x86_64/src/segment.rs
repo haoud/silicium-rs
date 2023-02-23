@@ -14,10 +14,12 @@ impl Selector {
 
     /// Create a new segment selector. The index is the index of the segment in the GDT, and the
     /// privilege is the privilege level used for this segment.
+    #[must_use]
     pub const fn new(index: u16, privilege: Privilege) -> Self {
         Self((index * 0x10) | (privilege as u16))
     }
 
+    #[must_use]
     pub const fn value(self) -> u16 {
         self.0
     }
@@ -27,6 +29,7 @@ pub struct CS;
 impl CS {
     /// Read the current code segment selector.
     #[inline]
+    #[must_use]
     pub fn read() -> u16 {
         let cs: u16;
         unsafe {
@@ -64,6 +67,7 @@ pub struct DS;
 impl DS {
     /// Read the current data segment selector.
     #[inline]
+    #[must_use]
     pub fn read() -> u16 {
         let ds: u16;
         unsafe {
@@ -88,6 +92,7 @@ pub struct ES;
 impl ES {
     /// Read the current extra segment selector.
     #[inline]
+    #[must_use]
     pub fn read() -> u16 {
         let es: u16;
         unsafe {
@@ -126,6 +131,7 @@ pub struct SS;
 impl SS {
     /// Read the current stack segment selector.
     #[inline]
+    #[must_use]
     pub fn read() -> u16 {
         let ss: u16;
         unsafe {

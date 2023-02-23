@@ -10,7 +10,14 @@ pub struct Table<const N: usize> {
 }
 
 impl<const N: usize> Table<N> {
+    pub const MAX_SIZE: usize = 8192;
+    const MAX_SIZE_ASSERT: () = assert!(
+        N <= Self::MAX_SIZE,
+        "GDT cannot have more than 8192 entries"
+    );
+
     /// Creates a new empty GDT. All entries are set to the NULL descriptor by default
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             descriptors: [Entry::NULL; N],
@@ -19,6 +26,7 @@ impl<const N: usize> Table<N> {
     }
 
     /// Returns the total number of entries in the GDT.
+    #[must_use]
     pub const fn capacity(&self) -> usize {
         N
     }
@@ -27,16 +35,17 @@ impl<const N: usize> Table<N> {
     ///
     /// # Panics
     /// This function panics if the index is out of bounds.
-    pub fn set(&mut self, index: usize, descriptor: Descriptor) {
+    pub fn set(&mut self, index: usize, descriptor: &Descriptor) {
         assert!(index < N, "out of bounds index when setting a GDT entry");
         if let Descriptor::Segment(x) = descriptor {
-            self.descriptors[index] = Entry::new(x, 0);
+            self.descriptors[index] = Entry::new(*x, 0);
         } else if let Descriptor::System(x, y) = descriptor {
-            self.descriptors[index] = Entry::new(x, y);
+            self.descriptors[index] = Entry::new(*x, *y);
         }
     }
 
     /// Set the GDT register to point to the GDT and load it into the CPU.
+    #[allow(clippy::cast_possible_truncation)]
     pub fn flush(&mut self) {
         self.register.limit = (N * core::mem::size_of::<Entry>() - 1) as u16;
         self.register.base = self.descriptors.as_ptr() as u64;
@@ -58,14 +67,14 @@ impl Register {
     }
 
     /// Returns a raw pointer to the GDT register.
-    pub const fn as_ptr(&self) -> *const Self {
-        self as *const Self
+    pub fn pointer(&self) -> u64 {
+        self as *const Self as u64
     }
 
     /// Load the GDT register into the CPU.
     pub fn load(&self) {
         unsafe {
-            cpu::lgdt(self.as_ptr() as *const u64);
+            cpu::lgdt(self.pointer());
         }
     }
 }
@@ -78,12 +87,13 @@ pub enum Descriptor {
 
 impl Descriptor {
     pub const NULL: Self = Self::Segment(0);
-    pub const KERNEL_CODE64: Self = Self::Segment(0x00af9b000000ffff);
-    pub const KERNEL_DATA: Self = Self::Segment(0x00cf93000000ffff);
-    pub const USER_CODE64: Self = Self::Segment(0x00af9b000000ffff);
-    pub const USER_DATA: Self = Self::Segment(0x00cf93000000ffff);
+    pub const KERNEL_CODE64: Self = Self::Segment(0x00af_9b00_0000_ffff);
+    pub const KERNEL_DATA: Self = Self::Segment(0x00cf_9300_0000_ffff);
+    pub const USER_CODE64: Self = Self::Segment(0x00af_9b00_0000_ffff);
+    pub const USER_DATA: Self = Self::Segment(0x00cf_9300_0000_ffff);
 
     /// Create a new TSS descriptor.
+    #[must_use]
     pub fn tss(tss: &TaskStateSegment) -> Self {
         let mut low = DescriptorFlags::PRESENT.bits();
         let ptr = tss.as_ptr() as u64;
@@ -92,13 +102,13 @@ impl Descriptor {
         low.set_bit_range(15, 0, (core::mem::size_of::<TaskStateSegment>() - 1) as u64);
 
         // Set the low 32 bits of the base address
-        low.set_bit_range(39, 16, ptr & 0xFFFFFF);
+        low.set_bit_range(39, 16, ptr & 0xFF_FFFF);
         low.set_bit_range(63, 56, (ptr >> 24) & 0xFF);
 
         // Set the type to 0b1001 (x86_64 available TSS)
         low.set_bit_range(43, 40, 0b1001);
 
-        Self::System(low, (tss.as_ptr() as u64 >> 32) as u32 as u64)
+        Self::System(low, (tss.as_ptr() as u64 >> 32) & 0xFFFF_FFFF)
     }
 }
 
@@ -119,6 +129,7 @@ bitflags! {
 }
 
 impl DescriptorFlags {
+    #[must_use]
     pub const fn new() -> Self {
         Self::empty()
     }
