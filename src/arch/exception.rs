@@ -51,103 +51,103 @@ fn register_exception_handler(index: u8, handler: unsafe extern "C" fn()) {
     idt.set_descriptor(index, descriptor);
 }
 
-pub fn divide_by_zero_handler(_state: State) {
+pub extern "C" fn divide_by_zero_handler(_state: State) {
     panic!("Divide by zero exception");
 }
 
-pub fn debug_handler(_state: State) {
+pub extern "C" fn debug_handler(_state: State) {
     panic!("Debug exception");
 }
 
-pub fn non_maskable_interrupt_handler(_state: State) {
+pub extern "C" fn non_maskable_interrupt_handler(_state: State) {
     panic!("Non-maskable interrupt");
 }
 
-pub fn breakpoint_handler(_state: State) {
+pub extern "C" fn breakpoint_handler(_state: State) {
     panic!("Breakpoint exception");
 }
 
-pub fn overflow_handler(_state: State) {
+pub extern "C" fn overflow_handler(_state: State) {
     panic!("Overflow exception");
 }
 
-pub fn bound_range_exceeded_handler(_state: State) {
+pub extern "C" fn bound_range_exceeded_handler(_state: State) {
     panic!("Bound range exceeded exception");
 }
 
-pub fn invalid_opcode_handler(_state: State) {
+pub extern "C" fn invalid_opcode_handler(_state: State) {
     panic!("Invalid opcode exception");
 }
 
-pub fn device_not_available_handler(_state: State) {
+pub extern "C" fn device_not_available_handler(_state: State) {
     panic!("Device not available exception");
 }
 
-pub fn double_fault_handler(_state: State) {
+pub extern "C" fn double_fault_handler(_state: State) {
     panic!("Double fault");
 }
 
-pub fn coprocessor_segment_overrun_handler(_state: State) {
+pub extern "C" fn coprocessor_segment_overrun_handler(_state: State) {
     panic!("Coprocessor segment overrun exception");
 }
 
-pub fn invalid_tss_handler(_state: State) {
+pub extern "C" fn invalid_tss_handler(_state: State) {
     panic!("Invalid TSS exception");
 }
 
-pub fn segment_not_present_handler(_state: State) {
+pub extern "C" fn segment_not_present_handler(_state: State) {
     panic!("Segment not present exception");
 }
 
-pub fn stack_segment_fault_handler(_state: State) {
+pub extern "C" fn stack_segment_fault_handler(_state: State) {
     panic!("Stack segment fault exception");
 }
 
-pub fn general_protection_fault_handler(_state: State) {
+pub extern "C" fn general_protection_fault_handler(_state: State) {
     panic!("General protection fault");
 }
 
-pub fn page_fault_handler(_state: State) {
+pub extern "C" fn page_fault_handler(_state: State) {
     panic!("Page fault");
 }
 
-pub fn reserved_handler(_state: State) {
+pub extern "C" fn reserved_handler(_state: State) {
     panic!("Reserved exception");
 }
 
-pub fn x87_floating_point_handler(_state: State) {
+pub extern "C" fn x87_floating_point_handler(_state: State) {
     panic!("x87 floating point exception");
 }
 
-pub fn alignment_check_handler(_state: State) {
+pub extern "C" fn alignment_check_handler(_state: State) {
     panic!("Alignment check exception");
 }
 
-pub fn machine_check_handler(_state: State) {
+pub extern "C" fn machine_check_handler(_state: State) {
     panic!("Machine check exception");
 }
 
-pub fn simd_floating_point_handler(_state: State) {
+pub extern "C" fn simd_floating_point_handler(_state: State) {
     panic!("SIMD floating point exception");
 }
 
-pub fn virtualization_handler(_state: State) {
+pub extern "C" fn virtualization_handler(_state: State) {
     panic!("Virtualization exception");
 }
 
-pub fn control_protection_handler(_state: State) {
+pub extern "C" fn control_protection_handler(_state: State) {
     panic!("Control protection exception");
 }
 
-pub fn hypervisor_injection_handler(_state: State) {
+pub extern "C" fn hypervisor_injection_handler(_state: State) {
     panic!("Hypervisor injection exception");
 }
 
-pub fn vmm_communication_handler(_state: State) {
+pub extern "C" fn vmm_communication_handler(_state: State) {
     panic!("Hypervisor injection exception");
 }
 
-pub fn security_exception_handler(_state: State) {
+pub extern "C" fn security_exception_handler(_state: State) {
     panic!("Security exception");
 }
 

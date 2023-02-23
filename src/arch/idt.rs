@@ -29,7 +29,7 @@ pub fn setup() {
 /// handler is installed for it. Currently, this function only panics but it should not panic in the
 /// future, only a debug message should be printed and eventually count the number of times the
 /// interrupt occurred.
-pub fn unknown_interrupt_handler(_state: State) {
+pub extern "C" fn unknown_interrupt_handler(_state: State) {
     panic!("Unknown interrupt");
 }
 

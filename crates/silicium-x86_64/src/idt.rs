@@ -235,6 +235,7 @@ impl Register {
 }
 
 /// This macro generates an interrupt handler.
+/// 
 /// The handler is a naked function that pushes the interrupt ID and error code (if any) on the
 /// stack, calls the [`interrupt_enter`] function, calls the handler function, and then calls the
 /// [`interrupt_exit`] function.
@@ -243,14 +244,19 @@ impl Register {
 /// stack. The handler must also saved the registers that are not automatically saved by the CPU in
 /// order to be able to correctly restore the context when the interrupt is finished.
 ///
-/// # Warning
+/// # Warning 
+/// The handler must have the following signature:
+/// ``` extern "C" fn handler(_: silicium_x86_86::cpu::State) ```
+///
 /// In order for this function to work properly, it is important that the CPU disables interrupts
 /// when the handler is invoked (see the `with_interrupts` method of the [`DescriptorFlags`]). If
 /// the interrupts are not disabled, a race condition can occur when the handler is invoked while
-/// performing the swapgs instruction. This can cause the handler to be invoked with the wrong
+/// performing the `swapgs` instruction. This can cause the handler to be invoked with the wrong
 /// GS register, which can lead to a crash.
 /// When your handler is invoked, your are free to re-enable interrupts if you want to, as their
 /// previous state will be restored when the interrupt is finished.
+/// 
+/// Failure to follow these rules will result in a undefined behavior, likely a crash.
 #[macro_export]
 macro_rules! interrupt_handler {
     // Generate an interrupt handler that pushes an error code on the stack (for example, a page
@@ -400,6 +406,7 @@ pub unsafe extern "C" fn interrupt_exit() {
         add rsp, 8 * 3
 
         # Swapgs if necessary
+        cli                              # To avoid race condition
         cmp QWORD PTR [rsp + 8], 0x10    # 0x10 is the selector for the CS kernel selector
         je 1f
         swapgs
