@@ -1,6 +1,6 @@
+use crate::sync::spin::Spinlock;
 use crate::x86_64::gdt;
 use crate::x86_64::segment;
-use crate::sync::spin::Spinlock;
 
 static GDT: Spinlock<gdt::Table<256>> = Spinlock::new(gdt::Table::new());
 
@@ -21,7 +21,10 @@ pub fn setup() {
     gdt.set(4, gdt::Descriptor::USER_DATA);
     gdt.flush();
     unsafe {
-        segment::reload(&segment::KERNEL_CODE64, &segment::KERNEL_DATA);
+        segment::reload(
+            &segment::Selector::KERNEL_CODE64,
+            &segment::Selector::KERNEL_DATA,
+        );
     }
 }
 
@@ -30,6 +33,9 @@ pub fn setup() {
 pub fn reload() {
     GDT.lock().flush();
     unsafe {
-        segment::reload(&segment::KERNEL_CODE64, &segment::KERNEL_DATA);
+        segment::reload(
+            &segment::Selector::KERNEL_CODE64,
+            &segment::Selector::KERNEL_DATA,
+        );
     }
 }

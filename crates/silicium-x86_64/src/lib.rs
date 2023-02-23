@@ -1,4 +1,6 @@
 #![no_std]
+#![feature(asm_const)]
+#![feature(naked_functions)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
 #![allow(dead_code)]
@@ -7,8 +9,9 @@
 
 pub mod cpu;
 pub mod gdt;
-pub mod interrupts;
+pub mod idt;
 pub mod io;
+pub mod irq;
 pub mod segment;
 pub mod serial;
 

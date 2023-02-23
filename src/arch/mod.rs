@@ -1,8 +1,11 @@
+pub mod exception;
 pub mod gdt;
+pub mod idt;
 
 pub fn init_bsp() {
     gdt::setup();
-    // TODO: Setup IDT
+    idt::setup();
+    exception::setup();
     // TODO: Setup TSS
     // TODO: Setup paging
     // TODO: Setup exceptions

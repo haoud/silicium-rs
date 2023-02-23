@@ -9,7 +9,7 @@ pub struct Table<const N: usize> {
 }
 
 impl<const N: usize> Table<N> {
-    /// Creates a new empty GDT. All entries are set to the NULL descriptor.
+    /// Creates a new empty GDT. All entries are set to the NULL descriptor by default
     pub const fn new() -> Self {
         Self {
             descriptors: [Entry::NULL; N],
@@ -18,7 +18,7 @@ impl<const N: usize> Table<N> {
     }
 
     /// Returns the total number of entries in the GDT.
-    pub const fn capacity() -> usize {
+    pub const fn capacity(&self) -> usize {
         N
     }
 
@@ -27,10 +27,7 @@ impl<const N: usize> Table<N> {
     /// # Panics
     /// This function panics if the index is out of bounds.
     pub fn set(&mut self, index: usize, descriptor: Descriptor) {
-        if index >= N {
-            panic!("out of bounds index when setting a GDT entry");
-        }
-
+        assert!(index < N, "out of bounds index when setting a GDT entry");
         if let Descriptor::Segment(x) = descriptor {
             self.descriptors[index] = Entry::new(x, 0);
         } else if let Descriptor::System(x, y) = descriptor {
@@ -60,14 +57,14 @@ impl Register {
     }
 
     /// Returns a raw pointer to the GDT register.
-    pub const fn to_ptr(&self) -> *const Self {
+    pub const fn as_ptr(&self) -> *const Self {
         self as *const Self
     }
 
     /// Load the GDT register into the CPU.
     pub fn load(&self) {
         unsafe {
-            cpu::lgdt(self.to_ptr() as *const u64);
+            cpu::lgdt(self.as_ptr() as *const u64);
         }
     }
 }

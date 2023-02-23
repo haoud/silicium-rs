@@ -3,7 +3,7 @@ use lock_api::{GuardSend, RawMutex};
 use silicium_x86_64 as x86_64;
 
 /// A spinlock that disables interrupts on the current core while it is locked.
-/// 
+///
 /// # Why this spinlock disables interrupts during locking ?
 /// If we lock a spinlock while interrupts are enabled, an interrupt handler could be called while
 /// the spinlock is locked. If the interrupt handler also tries to lock the same spinlock AND the
@@ -28,13 +28,14 @@ unsafe impl RawMutex for RawSpinlockIrq {
     /// If the lock was already acquired by another thread, this function returns `false` and
     /// interrupts are restored to their previous state.
     fn try_lock(&self) -> bool {
-        self.1.store(x86_64::interrupts::enabled(), Ordering::Relaxed);
-        x86_64::interrupts::disable();
-        let b = self.0
+        self.1.store(x86_64::irq::enabled(), Ordering::Relaxed);
+        x86_64::irq::disable();
+        let b = self
+            .0
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok();
         if !b {
-            x86_64::interrupts::restore(self.1.load(Ordering::Relaxed));
+            x86_64::irq::restore(self.1.load(Ordering::Relaxed));
         }
         b
     }
@@ -42,7 +43,7 @@ unsafe impl RawMutex for RawSpinlockIrq {
     /// Releases the lock and restores the interrupt state before the lock was acquired.
     unsafe fn unlock(&self) {
         self.0.store(false, Ordering::Release);
-        x86_64::interrupts::restore(self.1.load(Ordering::Relaxed));
+        x86_64::irq::restore(self.1.load(Ordering::Relaxed));
     }
 
     /// Returns `true` if the lock is currently acquired, `false` otherwise.

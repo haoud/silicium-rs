@@ -1,13 +1,32 @@
 use core::arch::asm;
 
+use crate::cpu::Privilege;
+
+#[repr(transparent)]
 pub struct Selector(u16);
 
-pub const KERNEL_CODE64: Selector = Selector(0x10);
-pub const KERNEL_DATA: Selector = Selector(0x20);
+impl Selector {
+    pub const NULL: Selector = Selector::new(0, Privilege::KERNEL);
+    pub const KERNEL_CODE64: Selector = Selector::new(1, Privilege::KERNEL);
+    pub const KERNEL_DATA: Selector = Selector::new(2, Privilege::KERNEL);
+    pub const USER_CODE64: Selector = Selector::new(3, Privilege::USER);
+    pub const USER_DATA: Selector = Selector::new(4, Privilege::USER);
+
+    /// Create a new segment selector. The index is the index of the segment in the GDT, and the
+    /// privilege is the privilege level used for this segment.
+    pub const fn new(index: u16, privilege: Privilege) -> Self {
+        Self((index * 0x10) | (privilege as u16))
+    }
+
+    pub const fn value(self) -> u16 {
+        self.0
+    }
+}
 
 pub struct CS;
 impl CS {
     /// Read the current code segment selector.
+    #[inline]
     pub fn read() -> u16 {
         let cs: u16;
         unsafe {
@@ -21,6 +40,7 @@ impl CS {
     /// # Safety
     /// This function is unsafe because it can lead to undefined behavior if the new selector is
     /// invalid.
+    #[inline]
     pub unsafe fn write(selector: u16) {
         unsafe {
             // Some black magic to load a new code segment selector. This is a bit tricky because
@@ -43,6 +63,7 @@ impl CS {
 pub struct DS;
 impl DS {
     /// Read the current data segment selector.
+    #[inline]
     pub fn read() -> u16 {
         let ds: u16;
         unsafe {
@@ -56,6 +77,7 @@ impl DS {
     /// # Safety
     /// This function is unsafe because it can lead to undefined behavior if the new selector is
     /// invalid.
+    #[inline]
     pub unsafe fn write(selector: u16) {
         unsafe {
             asm!("mov ds, {0:x}", in(reg) selector, options(nomem, nostack, preserves_flags));
@@ -65,6 +87,7 @@ impl DS {
 pub struct ES;
 impl ES {
     /// Read the current extra segment selector.
+    #[inline]
     pub fn read() -> u16 {
         let es: u16;
         unsafe {
@@ -78,6 +101,7 @@ impl ES {
     /// # Safety
     /// This function is unsafe because it can lead to undefined behavior if the new selector is
     /// invalid.
+    #[inline]
     pub unsafe fn write(selector: u16) {
         unsafe {
             asm!("mov es, {0:x}", in(reg) selector, options(nomem, nostack, preserves_flags));
@@ -93,6 +117,7 @@ impl GS {
     /// # Safety
     /// This function is unsafe because it can lead to undefined behavior if the selector loaded
     /// into the GS register is invalid.
+    #[inline]
     pub unsafe fn swap() {
         asm!("swapgs", options(nomem, nostack, preserves_flags));
     }
@@ -100,6 +125,7 @@ impl GS {
 pub struct SS;
 impl SS {
     /// Read the current stack segment selector.
+    #[inline]
     pub fn read() -> u16 {
         let ss: u16;
         unsafe {
@@ -113,6 +139,7 @@ impl SS {
     /// # Safety
     /// This function is unsafe because it can lead to undefined behavior if the new selector is
     /// invalid.
+    #[inline]
     pub unsafe fn write(selector: u16) {
         unsafe {
             asm!("mov ss, {0:x}", in(reg) selector, options(nomem, nostack, preserves_flags));
@@ -121,7 +148,7 @@ impl SS {
 }
 
 /// Reload the code, data and stack segment registers with the given selectors. FS and GS are not
-/// reloaded because they are used for the TLS and need to be handled separately with MSRs.
+/// reloaded because they are used for the TLS and need to be handled separately.
 pub unsafe fn reload(code: &Selector, data: &Selector) {
     DS::write(data.0);
     ES::write(data.0);

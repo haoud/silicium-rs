@@ -5,7 +5,9 @@
 #![allow(dead_code)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_safety_doc)]
+#![feature(asm_const)]
 #![feature(fn_traits)]
+#![feature(naked_functions)]
 #![feature(core_intrinsics)]
 
 use ::log::info;
