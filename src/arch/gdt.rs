@@ -1,17 +1,19 @@
 use crate::sync::spin::Spinlock;
 use crate::x86_64::gdt;
 use crate::x86_64::segment;
+use crate::x86_64::tss::TaskStateSegment;
 
-static GDT: Spinlock<gdt::Table<256>> = Spinlock::new(gdt::Table::new());
+static TSS: Spinlock<TaskStateSegment> = Spinlock::new(TaskStateSegment::new());
+static GDT: Spinlock<gdt::Table<6>> = Spinlock::new(gdt::Table::new());
 
 /// Setup the GDT and load it into the CPU. The GDT created by this function is a classic `x86_64`
-/// GDT, with 5 entries:
+/// GDT, with 6 entries:
 /// - NULL descriptor
 /// - Kernel 64 bits code descriptor
 /// - Kernel data descriptor
 /// - User 64 bits code descriptor
 /// - User data descriptor
-/// Later on, other entries will be added to the GDT, especially for the TSS and kernel/user TLS.
+/// - TSS descriptor
 pub fn setup() {
     let mut gdt = GDT.lock();
     gdt.set(0, gdt::Descriptor::NULL);
@@ -19,6 +21,7 @@ pub fn setup() {
     gdt.set(2, gdt::Descriptor::KERNEL_DATA);
     gdt.set(3, gdt::Descriptor::USER_CODE64);
     gdt.set(4, gdt::Descriptor::USER_DATA);
+    gdt.set(5, gdt::Descriptor::tss(&TSS.lock()));
     gdt.flush();
     unsafe {
         segment::reload(

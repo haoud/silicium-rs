@@ -14,6 +14,7 @@ pub mod io;
 pub mod irq;
 pub mod segment;
 pub mod serial;
+pub mod tss;
 
 pub mod prelude {
     pub use crate::*;

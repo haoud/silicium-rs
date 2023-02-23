@@ -104,6 +104,7 @@ pub unsafe fn hlt() {
 /// # Safety
 /// This function is unsafe because it can cause undefined behavior if the given
 /// gdtr is not a valid GDT register.
+#[inline]
 pub unsafe fn lgdt(gdtr: *const u64) {
     asm!("lgdt [{}]", in(reg) gdtr, options(readonly, nostack, preserves_flags));
 }
@@ -114,6 +115,19 @@ pub unsafe fn lgdt(gdtr: *const u64) {
 /// # Safety
 /// This function is unsafe because it can cause undefined behavior if the given
 /// idtr is not a valid IDT register.
+#[inline]
+
 pub unsafe fn lidt(idtr: *const u64) {
     asm!("lidt [{}]", in(reg) idtr, options(readonly, nostack, preserves_flags));
+}
+
+/// Load a new task state segment (TSS) into the CPU. The parameter is the selector of the TSS.
+///
+/// # Safety
+/// This function is unsafe because it can cause undefined behavior if the given selector is not a
+/// valid TSS selector, if the TSS is not loaded or not properly configured or if the GDT is not
+/// loaded or not properly configured.
+#[inline]
+pub unsafe fn ltr(selector: u16) {
+    asm!("ltr ax", in("ax") selector, options(readonly, nostack, preserves_flags));
 }

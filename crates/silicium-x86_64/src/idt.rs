@@ -235,7 +235,7 @@ impl Register {
 }
 
 /// This macro generates an interrupt handler.
-/// 
+///
 /// The handler is a naked function that pushes the interrupt ID and error code (if any) on the
 /// stack, calls the [`interrupt_enter`] function, calls the handler function, and then calls the
 /// [`interrupt_exit`] function.
@@ -244,7 +244,7 @@ impl Register {
 /// stack. The handler must also saved the registers that are not automatically saved by the CPU in
 /// order to be able to correctly restore the context when the interrupt is finished.
 ///
-/// # Warning 
+/// # Warning
 /// The handler must have the following signature:
 /// ``` extern "C" fn handler(_: silicium_x86_86::cpu::State) ```
 ///
@@ -255,7 +255,7 @@ impl Register {
 /// GS register, which can lead to a crash.
 /// When your handler is invoked, your are free to re-enable interrupts if you want to, as their
 /// previous state will be restored when the interrupt is finished.
-/// 
+///
 /// Failure to follow these rules will result in a undefined behavior, likely a crash.
 #[macro_export]
 macro_rules! interrupt_handler {
@@ -300,22 +300,22 @@ macro_rules! interrupt_handler {
 /// This macro prepare a rust interrupt handler to be called. It is used by the [`interrupt_handler`]
 /// macro, and performs the following actions:
 ///  - Clear the direction flag (DF) in the EFLAGS register. This is required by the system V ABI.
-/// 
+///
 ///  - Swap the GS register if needed with the `swapgs` instruction. The GS register is swapped if
 ///    the interrupt was triggered from user mode. This is required because the GS register could be
 ///    used by the user code, andthe kernel use it to store TLS data.
-/// 
+///
 ///  - Save the scratch registers (RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11) on the stack.
-/// 
+///
 ///  - Save the preserved registers (RBX, RBP, R12, R13, R14, R15) on the stack.
-/// 
-///  - Save the FS register on the stack (the FS register is used to store the TLS data when 
-///    compiling the kernel, and I don't know how to change it to force the compiler to use the GS 
+///
+///  - Save the FS register on the stack (the FS register is used to store the TLS data when
+///    compiling the kernel, and I don't know how to change it to force the compiler to use the GS
 ///    register).
-/// 
+///
 ///  - Prepare the argument for the handler. The argument is a pointer to the stack, which contains
 ///   the saved registers.
-/// 
+///
 #[naked]
 #[no_mangle]
 pub unsafe extern "C" fn interrupt_enter() {
@@ -354,6 +354,7 @@ pub unsafe extern "C" fn interrupt_enter() {
         # TODO: Set FS to the right value 
         # mov fs, 0x50
 
+        # Stack should be aligned on a 16 bytes boundary
         # Prepare the argument for the handler
         mov rdi, rsp
 
@@ -372,7 +373,7 @@ pub unsafe extern "C" fn interrupt_enter() {
 /// - Restore the scratch registers (RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11) from the stack.
 /// - Skip the error code and the interrupt ID on the stack, skip the return address used by the
 ///  [`interrupt_enter`] macro
-/// - Restore the GS register if needed with the `swapgs` instruction (see the [`interrupt_enter`] 
+/// - Restore the GS register if needed with the `swapgs` instruction (see the [`interrupt_enter`]
 ///  macro for more information).
 /// - Perform an `iretq` instruction to restore the context.
 #[naked]

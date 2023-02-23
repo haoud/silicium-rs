@@ -1,6 +1,7 @@
+use bitfield::BitRangeMut;
 use bitflags::bitflags;
 
-use crate::cpu;
+use crate::{cpu, tss::TaskStateSegment};
 
 #[derive(Debug, Clone)]
 pub struct Table<const N: usize> {
@@ -81,6 +82,24 @@ impl Descriptor {
     pub const KERNEL_DATA: Self = Self::Segment(0x00cf93000000ffff);
     pub const USER_CODE64: Self = Self::Segment(0x00af9b000000ffff);
     pub const USER_DATA: Self = Self::Segment(0x00cf93000000ffff);
+
+    /// Create a new TSS descriptor.
+    pub fn tss(tss: &TaskStateSegment) -> Self {
+        let mut low = DescriptorFlags::PRESENT.bits();
+        let ptr = tss.as_ptr() as u64;
+
+        // Set the limit to the size of the TSS minus 1 (because the limit is inclusive)
+        low.set_bit_range(15, 0, (core::mem::size_of::<TaskStateSegment>() - 1) as u64);
+
+        // Set the low 32 bits of the base address
+        low.set_bit_range(39, 16, ptr & 0xFFFFFF);
+        low.set_bit_range(63, 56, (ptr >> 24) & 0xFF);
+
+        // Set the type to 0b1001 (x86_64 available TSS)
+        low.set_bit_range(43, 40, 0b1001);
+
+        Self::System(low, (tss.as_ptr() as u64 >> 32) as u32 as u64)
+    }
 }
 
 bitflags! {
@@ -111,7 +130,6 @@ struct Entry(u64, u64);
 
 impl Entry {
     const NULL: Self = Self(0, 0);
-
     const fn new(x: u64, y: u64) -> Self {
         Self(x, y)
     }
