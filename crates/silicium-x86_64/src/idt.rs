@@ -44,17 +44,19 @@ pub enum ExceptionVector {
 
 #[repr(C, align(16))]
 pub struct Table {
-    entries: [Descriptor; 256],
+    entries: [Descriptor; Self::SIZE],
     register: Register,
 }
 
 impl Table {
+    const SIZE: usize = 256;
+
     /// Creates a new empty IDT. All entries are set to the MISSING descriptor by default. If a
     /// MISSING descriptor is triggered, a general protection fault is raised.
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            entries: [Descriptor::MISSING; 256],
+            entries: [Descriptor::MISSING; Self::SIZE],
             register: Register::null(),
         }
     }
@@ -62,7 +64,7 @@ impl Table {
     /// Returns the total number of entries in the IDT.
     #[must_use]
     pub const fn capacity(&self) -> usize {
-        self.entries.len()
+        Self::SIZE
     }
 
     /// Set the IDT entry at the given index to the given descriptor.
@@ -428,4 +430,15 @@ pub unsafe extern "C" fn interrupt_exit() {
         iretq",
         options(noreturn)
     );
+}
+
+#[cfg(test)]
+mod test {
+    use core::mem::size_of;
+
+    #[test]
+    fn struct_size_checks() {
+        assert_eq!(size_of::<super::Descriptor>(), 16);
+        assert_eq!(size_of::<super::Register>(), 10);
+    }
 }

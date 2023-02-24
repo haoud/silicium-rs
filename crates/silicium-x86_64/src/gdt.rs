@@ -11,14 +11,14 @@ pub struct Table<const N: usize> {
 
 impl<const N: usize> Table<N> {
     pub const MAX_SIZE: usize = 8192;
-    const MAX_SIZE_ASSERT: () = assert!(
-        N <= Self::MAX_SIZE,
-        "GDT cannot have more than 8192 entries"
-    );
+    const MAX_SIZE_ASSERT: () =
+        assert!(N <= Self::MAX_SIZE, "GDT can't be larger than 8192 entries");
 
     /// Creates a new empty GDT. All entries are set to the NULL descriptor by default
     #[must_use]
+    #[allow(clippy::let_unit_value)]
     pub const fn new() -> Self {
+        let _ = Self::MAX_SIZE_ASSERT; // Check that the GDT isn't too large
         Self {
             descriptors: [Entry::NULL; N],
             register: Register::null(),
@@ -34,7 +34,8 @@ impl<const N: usize> Table<N> {
     /// Set the GDT entry at the given index to the given descriptor.
     ///
     /// # Panics
-    /// This function panics if the index is out of bounds.
+    /// This function panics if the index is out of bounds (i.e. greater than or equal to the
+    /// GDT's capacity)
     pub fn set(&mut self, index: usize, descriptor: &Descriptor) {
         assert!(index < N, "out of bounds index when setting a GDT entry");
         if let Descriptor::Segment(x) = descriptor {
@@ -136,12 +137,30 @@ impl DescriptorFlags {
 }
 
 #[derive(Debug, Clone)]
-#[repr(C, align(8))]
+#[repr(C, packed(8))]
 struct Entry(u64, u64);
 
 impl Entry {
     const NULL: Self = Self(0, 0);
     const fn new(x: u64, y: u64) -> Self {
         Self(x, y)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use core::mem::size_of;
+
+    #[test]
+    fn struct_size_checks() {
+        assert_eq!(size_of::<super::Register>(), 10);
+        assert_eq!(size_of::<super::Entry>(), 16);
+    }
+
+    #[test]
+    #[should_panic]
+    fn gdt_out_of_bounds_access() {
+        let mut gdt = super::Table::<8192>::new();
+        gdt.set(8192, &super::Descriptor::NULL);
     }
 }

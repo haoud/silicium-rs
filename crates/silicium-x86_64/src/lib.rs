@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![feature(asm_const)]
 #![feature(naked_functions)]
 #![warn(clippy::all)]

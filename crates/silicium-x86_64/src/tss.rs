@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy)]
-#[repr(C, packed(8))]
+#[repr(C, packed(4))]
 pub struct TaskStateSegment {
     reserved_1: u32,
     pub stack_table: [u64; 3],
@@ -28,5 +28,15 @@ impl TaskStateSegment {
     #[must_use]
     pub const fn as_ptr(&self) -> *const Self {
         self as *const Self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use core::mem::size_of;
+
+    #[test]
+    fn struct_size_checks() {
+        assert_eq!(size_of::<super::TaskStateSegment>(), 104);
     }
 }
