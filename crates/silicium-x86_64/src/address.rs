@@ -2,14 +2,14 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// A canonical 64-bit virtual memory address.
 ///
-/// On `x86_64`, only the 48 lower bits of a virtual address can be used. This type guarantees that 
+/// On `x86_64`, only the 48 lower bits of a virtual address can be used. This type guarantees that
 /// the address is always canonical, i.e. that the top 17 bits are either all 0 or all 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Virtual(u64);
 
 /// An invalid virtual address.
-/// 
+///
 /// This type is used to represent an invalid virtual address. It is returned by [`Virtual::try_new`]
 /// when the given address is not canonical (see [`Virtual`] for more information).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -18,7 +18,7 @@ pub struct InvalidVirtual(u64);
 
 impl Virtual {
     /// Creates a new canonical virtual address.
-    /// 
+    ///
     /// # Panics
     /// This function panics if the given address is not canonical.
     #[must_use]
@@ -30,7 +30,7 @@ impl Virtual {
     }
 
     /// Tries to create a new canonical virtual address.
-    /// 
+    ///
     /// # Errors
     /// This function returns an [`InvalidVirtual`] error if the given address is not canonical, or
     /// a sign extension is performed if 48th bit is set and all bits from 49 to 63 are set to 0.
@@ -43,7 +43,7 @@ impl Virtual {
     }
 
     /// Creates a new canonical virtual address, truncating the address if necessary.
-    /// A sign extension is performed if 48th bit is set and all bits from 49 to 63 are set to 0, 
+    /// A sign extension is performed if 48th bit is set and all bits from 49 to 63 are set to 0,
     /// and set those bits to 1 in order to make the address canonical.
     #[must_use]
     #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
@@ -55,7 +55,7 @@ impl Virtual {
     }
 
     /// Creates a new canonical virtual address without checking if it is canonical.
-    /// 
+    ///
     /// # Safety
     /// This function is unsafe because it does not check if the given address is canonical. If the
     /// address is not canonical, the behavior is undefined.
@@ -107,7 +107,7 @@ impl Virtual {
 
     /// Align the address up to the given alignment. If the address is already aligned, this function
     /// does nothing.
-    /// 
+    ///
     /// # Panics
     /// This function panics if the given alignment is not a power of two.
     #[must_use]
@@ -125,7 +125,7 @@ impl Virtual {
 
     /// Align the address down to the given alignment. If the address is already aligned, this
     /// function does nothing.
-    /// 
+    ///
     /// # Panics
     /// This function panics if the given alignment is not a power of two.
     #[must_use]
@@ -139,7 +139,7 @@ impl Virtual {
     }
 
     /// Checks if the address is aligned to the given alignment.
-    /// 
+    ///
     /// # Panics
     /// This function panics if the given alignment is not a power of two.
     #[must_use]
@@ -155,20 +155,20 @@ impl Virtual {
     /// Align the address up to a page boundary (4 KiB). If the address is already aligned, this
     /// function does nothing.
     #[must_use]
-    pub fn page_align_up(&mut self) -> Self {
+    pub fn page_align_up(&self) -> Self {
         self.align_up::<u64>(4096)
     }
 
     /// Align the address down to a page boundary (4 KiB). If the address is already aligned, this
     /// function does nothing.
     #[must_use]
-    pub fn page_align_down(&mut self) -> Self {
+    pub fn page_align_down(&self) -> Self {
         self.align_down::<u64>(4096)
     }
 
     /// Checks if the address is aligned to a page boundary (4 KiB).
     #[must_use]
-    pub fn is_page_aligned(&mut self) -> bool {
+    pub fn is_page_aligned(&self) -> bool {
         self.is_aligned::<u64>(4096)
     }
 
@@ -315,7 +315,7 @@ pub struct InvalidPhysical(u64);
 
 impl Physical {
     /// Creates a new physical address.
-    /// 
+    ///
     /// # Panics
     /// If the address is not valid (bits 52-63 must be 0), this function panics.
     #[must_use]
@@ -327,9 +327,9 @@ impl Physical {
     }
 
     /// Try to create a new physical address.
-    /// 
+    ///
     /// # Errors
-    /// If the address is not valid (bits 52-63 must be 0), this function returns an error, 
+    /// If the address is not valid (bits 52-63 must be 0), this function returns an error,
     /// containing the invalid address.
     pub const fn try_new(address: u64) -> Result<Self, InvalidPhysical> {
         if address > 0x000F_FFFF_FFFF_FFFF {
@@ -347,7 +347,7 @@ impl Physical {
     }
 
     /// Creates a new physical address without checking if it is valid.
-    /// 
+    ///
     /// # Safety
     /// The address must be valid (bits 52-63 must be 0). If the address is not valid, the behavior
     /// is undefined.
@@ -426,17 +426,17 @@ impl Physical {
     }
 
     #[must_use]
-    pub fn page_align_up(&mut self) -> Self {
+    pub fn page_align_up(&self) -> Self {
         self.align_up::<u64>(4096)
     }
 
     #[must_use]
-    pub fn page_align_down(&mut self) -> Self {
+    pub fn page_align_down(&self) -> Self {
         self.align_down::<u64>(4096)
     }
 
     #[must_use]
-    pub fn is_page_aligned(&mut self) -> bool {
+    pub fn is_page_aligned(&self) -> bool {
         self.is_aligned::<u64>(4096)
     }
 }
@@ -524,6 +524,10 @@ impl SubAssign<usize> for Physical {
         self.0 -= rhs as u64;
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct Null;
 
 #[cfg(test)]
 mod test {
