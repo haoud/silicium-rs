@@ -7,6 +7,8 @@
 #![allow(clippy::missing_safety_doc)]
 #![feature(asm_const)]
 #![feature(fn_traits)]
+#![feature(once_cell)]
+#![feature(const_mut_refs)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
 
@@ -37,17 +39,7 @@ pub unsafe extern "C" fn start() -> ! {
     );
 
     arch::init_bsp();
+    mm::setup(&LIMINE_MEMMAP);
     info!("Silicium booted successfully!");
-
-    // Print the memory map
-    info!("Memory map:");
-    for entry in LIMINE_MEMMAP.get_response().get().unwrap().memmap().iter() {
-        info!(
-            "  {:016X} - {:016X} {:?}",
-            entry.base,
-            entry.base + entry.len,
-            entry.typ
-        );
-    }
     x86_64::cpu::freeze();
 }

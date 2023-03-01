@@ -155,21 +155,24 @@ impl Virtual {
     /// Align the address up to a page boundary (4 KiB). If the address is already aligned, this
     /// function does nothing.
     #[must_use]
-    pub fn page_align_up(&self) -> Self {
-        self.align_up::<u64>(4096)
+    pub const fn page_align_up(&self) -> Self {
+        Self::new_truncate(match self.0.checked_add(0xFFF) {
+            Some(addr) => addr & !0xFFF,
+            None => panic!("Overflow during aligning up a virtual address"),
+        })
     }
 
     /// Align the address down to a page boundary (4 KiB). If the address is already aligned, this
     /// function does nothing.
     #[must_use]
-    pub fn page_align_down(&self) -> Self {
-        self.align_down::<u64>(4096)
+    pub const fn page_align_down(&self) -> Self {
+        Self::new_truncate(self.0 & 0xFFF)
     }
 
     /// Checks if the address is aligned to a page boundary (4 KiB).
     #[must_use]
-    pub fn is_page_aligned(&self) -> bool {
-        self.is_aligned::<u64>(4096)
+    pub const fn is_page_aligned(&self) -> bool {
+        self.0.trailing_zeros() >= 12
     }
 
     #[must_use]
@@ -218,6 +221,12 @@ impl Virtual {
     #[must_use]
     pub const fn is_user(self) -> bool {
         !self.is_kernel()
+    }
+}
+
+impl From<u64> for Virtual {
+    fn from(address: u64) -> Self {
+        Self::new(address)
     }
 }
 
@@ -425,19 +434,38 @@ impl Physical {
         self.0 & (align - 1) == 0
     }
 
+    /// Align the address up to a page boundary (4 KiB). If the address is already aligned, this
+    /// function does nothing.
     #[must_use]
-    pub fn page_align_up(&self) -> Self {
-        self.align_up::<u64>(4096)
+    pub const fn page_align_up(&self) -> Self {
+        Self::new_truncate(match self.0.checked_add(0xFFF) {
+            Some(addr) => addr & !0xFFF,
+            None => panic!("Overflow during aligning up a physical address"),
+        })
+    }
+
+    /// Align the address down to a page boundary (4 KiB). If the address is already aligned, this
+    /// function does nothing.
+    #[must_use]
+    pub const fn page_align_down(&self) -> Self {
+        Self::new_truncate(self.0 & 0xFFF)
+    }
+
+    /// Checks if the address is aligned to a page boundary (4 KiB).
+    #[must_use]
+    pub const fn is_page_aligned(&self) -> bool {
+        self.0.trailing_zeros() >= 12
     }
 
     #[must_use]
-    pub fn page_align_down(&self) -> Self {
-        self.align_down::<u64>(4096)
+    pub const fn frame_index(self) -> u64 {
+        self.0 >> 12
     }
+}
 
-    #[must_use]
-    pub fn is_page_aligned(&self) -> bool {
-        self.is_aligned::<u64>(4096)
+impl From<u64> for Physical {
+    fn from(address: u64) -> Self {
+        Self::new(address)
     }
 }
 

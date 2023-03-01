@@ -4,20 +4,24 @@ use bitflags::bitflags;
 
 use crate::x86_64::address::Physical;
 
+pub mod dummy_allocator;
+pub mod state;
+
 /// Represents an error when a physical address is not page aligned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NotAligned(Physical, usize);
 
 /// Represents a physical memory frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct Frame {
     address: Physical,
     flags: FrameFlags,
+    count: usize,
 }
 
 impl Frame {
     /// Creates a new frame
-    /// 
+    ///
     /// # Panics
     /// Panics if the address is not page aligned (4 KiB aligned).
     #[must_use]
@@ -26,16 +30,24 @@ impl Frame {
             address.is_page_aligned(),
             "Frame address must be page aligned!"
         );
-        Self { address, flags }
+        Self {
+            address,
+            flags,
+            count: 0,
+        }
     }
 
     /// Try to create a new frame.
-    /// 
+    ///
     /// # Errors
     /// Returns an [`NotAligned`] error if the address is not page aligned
     pub fn try_new(address: Physical, flags: FrameFlags) -> Result<Self, NotAligned> {
         if address.is_page_aligned() {
-            Ok(Self { address, flags })
+            Ok(Self {
+                address,
+                flags,
+                count: 0,
+            })
         } else {
             Err(NotAligned(address, 4096usize))
         }
@@ -67,6 +79,19 @@ impl Frame {
     #[must_use]
     pub const fn flags(&self) -> FrameFlags {
         self.flags
+    }
+
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.count
+    }
+
+    pub fn increment_count(&mut self) {
+        self.count += 1;
+    }
+
+    pub fn decrement_count(&mut self) {
+        self.count -= 1;
     }
 
     /// Create a range of frames. The range is semi-inclusive, meaning that the end frame is not
@@ -106,41 +131,90 @@ impl SubAssign<u64> for Frame {
 }
 
 #[derive(Debug, Clone, Copy, Hash)]
-pub struct Stat {
-    total: usize,     // Total number of frames
-    free: usize,      // Total number of usable frames for allocation
-    allocated: usize, // Total number of allocated frames
-    reserved: usize,  // Total number of reserved frames
-    kernel: usize,    // Total number of kernel frames
-    borrowed: usize,  // Total number of borrowed frames
+pub struct Stats {
+    pub total: usize,     // Total number of frames
+    pub usable: usize,    // Total number of usable frames for allocation
+    pub allocated: usize, // Total number of allocated frames
+    pub reserved: usize,  // Total number of reserved frames
+    pub kernel: usize,    // Total number of kernel frames
+    pub borrowed: usize,  // Total number of borrowed frames
+    pub poisoned: usize,  // Total number of poisoned frames
+}
+
+impl Stats {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            total: 0,
+            usable: 0,
+            allocated: 0,
+            reserved: 0,
+            kernel: 0,
+            borrowed: 0,
+            poisoned: 0,
+        }
+    }
 }
 
 bitflags! {
     pub struct FrameFlags : u64 {
         const NONE = 0;
-        const RESERVED = 1 << 0;
-        const ALLOCATED = 1 << 1;
-        const ZEROED = 1 << 2;
-        const DIRTY = 1 << 3;
-        const KERNEL = 1 << 4;
-        const BORROWED = 1 << 5;
-        const BIOS = 1 << 5;
-        const ISA = 1 << 6;
-        const X86 = 1 << 7;
+        const POISONED = 1 << 0;
+        const RESERVED = 1 << 1;
+        const FREE = 1 << 2;
+        const ZEROED = 1 << 3;
+        const DIRTY = 1 << 4;
+        const KERNEL = 1 << 5;
+        const BORROWED = 1 << 6;
+        const BIOS = 1 << 7;
+        const ISA = 1 << 8;
+        const X86 = 1 << 9;
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct Range {
     pub start: Frame, // Inclusive
     pub end: Frame,   // Exclusive
 }
 
 impl Range {
+    #[must_use]
+    pub const fn new(start: Frame, end: Frame) -> Self {
+        Self { start, end }
+    }
+
+    /// Check if the range contains the given address.
+    #[must_use]
+    pub const fn contains_address(&self, address: Physical) -> bool {
+        address.as_u64() >= self.start.address.as_u64()
+            && address.as_u64() < self.end.address.as_u64()
+    }
+
+    /// Check if the range contains the given frame address.
+    #[must_use]
+    pub const fn contains(&self, frame: Frame) -> bool {
+        frame.address.as_u64() >= self.start.address.as_u64()
+            && frame.address.as_u64() < self.end.address.as_u64()
+    }
+
+    /// Returns the number of frames in the range.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn count(&self) -> usize {
+        (self.end.address.as_u64() - self.start.address.as_u64()) as usize / 4096
+    }
+
+    /// Returns the length of the range, in frames.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.count()
+    }
+
     /// Check if the range is empty.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.start >= self.end
+    pub const fn is_empty(&self) -> bool {
+        self.start.address.as_u64() >= self.end.address.as_u64()
     }
 }
 
@@ -170,11 +244,17 @@ bitflags! {
 }
 
 pub unsafe trait Allocator {
-    fn allocate(&mut self, flags: AllocationFlags) -> Option<Frame>;
-    fn allocate_range(&mut self, n: usize, flags: AllocationFlags) -> Option<Range>;
+    fn setup(&mut self, statistics: Stats);
+    unsafe fn allocate(&mut self, flags: AllocationFlags) -> Option<Frame>;
+    unsafe fn allocate_range(&mut self, count: usize, flags: AllocationFlags) -> Option<Range>;
+    unsafe fn reference(&mut self, frame: Frame);
+    unsafe fn deallocate(&mut self, frame: Frame);
+    unsafe fn deallocate_range(&mut self, range: Range);
+    fn statistics(&self) -> Stats;
 }
 
-pub unsafe trait Deallocator {
-    fn deallocate(&mut self, frame: Frame);
-    fn deallocate_range(&mut self, range: Range);
+#[must_use]
+#[allow(clippy::cast_possible_truncation)]
+pub const fn index(address: u64) -> usize {
+    Physical::new(address).frame_index() as usize
 }
