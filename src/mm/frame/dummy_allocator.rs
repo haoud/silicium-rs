@@ -1,3 +1,7 @@
+use silicium_internal::x86_64::paging::PAGE_SIZE;
+
+use crate::arch::address::phys_to_virt;
+
 use super::{AllocationFlags, Frame, FrameFlags, Stats};
 
 pub struct Allocator {
@@ -24,8 +28,8 @@ unsafe impl super::Allocator for Allocator {
     /// # Warning
     /// This method should only be used when no allocator is available because it is very, very
     /// inefficient, especially when the frame state is large and when low memory is available.
-    /// Furthermore, many allocations flags are not supported (e.g. `AllocationFlags::ZEROED`,
-    /// `AllocationFlags::BIOS`, `AllocationFlags::ISA`, `AllocationFlags::X86`)
+    /// Furthermore, many allocations flags are not supported (e.g. `AllocationFlags::BIOS`,
+    /// `AllocationFlags::ISA`, `AllocationFlags::X86`)
     unsafe fn allocate(&mut self, flags: super::AllocationFlags) -> Option<Frame> {
         // Acquire the frame state and the frame statistics, the order is important and should be
         // consistent in all functions that use the frame state and the frame statistics.
@@ -41,6 +45,10 @@ unsafe impl super::Allocator for Allocator {
                     frame.flags.insert(FrameFlags::KERNEL);
                     self.statistic.kernel += 1;
                 }
+                if flags.contains(AllocationFlags::ZEROED) {
+                    let frame = phys_to_virt(frame.address).as_mut_ptr::<u8>();
+                    frame.write_bytes(0, PAGE_SIZE);
+                }
                 frame.flags.remove(FrameFlags::FREE);
                 frame.increment_count();
                 *frame
@@ -54,8 +62,8 @@ unsafe impl super::Allocator for Allocator {
     /// Please, do not use this method. It is super, super inefficient, and should only be used
     /// when no allocator is available and for initialization purposes, when allocation speed is
     /// not important.
-    /// Furthermore, many allocations flags are not supported (e.g. `AllocationFlags::ZEROED`,
-    /// `AllocationFlags::BIOS`, `AllocationFlags::ISA`, `AllocationFlags::X86`)
+    /// Furthermore, many allocations flags are not supported (e.g. `AllocationFlags::BIOS`,
+    /// `AllocationFlags::ISA`, `AllocationFlags::X86`)
     unsafe fn allocate_range(
         &mut self,
         count: usize,
@@ -77,6 +85,10 @@ unsafe impl super::Allocator for Allocator {
                     if flags.contains(AllocationFlags::KERNEL) {
                         frame.flags.insert(FrameFlags::KERNEL);
                         self.statistic.kernel += 1;
+                    }
+                    if flags.contains(AllocationFlags::ZEROED) {
+                        let frame = phys_to_virt(frame.address).as_mut_ptr::<u8>();
+                        frame.write_bytes(0, PAGE_SIZE);
                     }
                     frame.flags.remove(FrameFlags::FREE);
                     frame.increment_count();

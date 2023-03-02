@@ -33,6 +33,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e9d0c951056ac044f0e6b09448b9d702f8fb1001db89cffd2bc467bd1c25307"
 
 [[package]]
+name = "linked_list_allocator"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e322f259d225fbae43a1b053b2dc6a5968a6bdf8b205f5de684dab485b95030e"
+dependencies = [
+ "spinning_top",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -64,6 +73,7 @@ dependencies = [
  "bitfield",
  "bitflags",
  "limine",
+ "linked_list_allocator",
  "log",
  "silicium-internal",
 ]
@@ -90,4 +100,13 @@ version = "0.1.0"
 dependencies = [
  "bitfield",
  "bitflags",
+]
+
+[[package]]
+name = "spinning_top"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b9eb1a2f4c41445a3a0ff9abc5221c5fcd28e1f13cd7c0397706f9ac938ddb0"
+dependencies = [
+ "lock_api",
 ]

@@ -11,6 +11,9 @@
 #![feature(const_mut_refs)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
 
 use ::log::info;
 use limine::{LimineHhdmRequest, LimineMemmapRequest};
