@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::arch::paging;
 use crate::x86_64::address::Virtual;
 use crate::x86_64::cpu::Privilege;
@@ -107,8 +109,8 @@ pub extern "C" fn stack_segment_fault_handler(_state: State) {
     panic!("Stack segment fault exception");
 }
 
-pub extern "C" fn general_protection_fault_handler(_state: State) {
-    panic!("General protection fault");
+pub extern "C" fn general_protection_fault_handler(state: State) {
+    panic!("General protection fault (error code: 0x{:02x})", state.code);
 }
 
 pub extern "C" fn page_fault_handler(state: State) {
@@ -164,37 +166,37 @@ pub extern "C" fn security_exception_handler(_state: State) {
     panic!("Security exception");
 }
 
-interrupt_handler!(0, divide_by_zero, divide_by_zero_handler);
-interrupt_handler!(1, debug, debug_handler);
-interrupt_handler!(2, non_maskable_interrupt, non_maskable_interrupt_handler);
-interrupt_handler!(3, breakpoint, breakpoint_handler);
-interrupt_handler!(4, overflow, overflow_handler);
-interrupt_handler!(5, bound_range_exceeded, bound_range_exceeded_handler);
-interrupt_handler!(6, invalid_opcode, invalid_opcode_handler);
-interrupt_handler!(7, device_not_available, device_not_available_handler);
+interrupt_handler!(0, divide_by_zero, divide_by_zero_handler, 0);
+interrupt_handler!(1, debug, debug_handler, 0);
+interrupt_handler!(2, non_maskable_interrupt, non_maskable_interrupt_handler, 0);
+interrupt_handler!(3, breakpoint, breakpoint_handler, 0);
+interrupt_handler!(4, overflow, overflow_handler, 0);
+interrupt_handler!(5, bound_range_exceeded, bound_range_exceeded_handler, 0);
+interrupt_handler!(6, invalid_opcode, invalid_opcode_handler, 0);
+interrupt_handler!(7, device_not_available, device_not_available_handler, 0);
 interrupt_handler!(8, double_fault, double_fault_handler);
 #[rustfmt::skip]
-interrupt_handler!(9,coprocessor_segment_overrun, coprocessor_segment_overrun_handler);
+interrupt_handler!(9,coprocessor_segment_overrun, coprocessor_segment_overrun_handler, 0);
 interrupt_handler!(10, invalid_tss, invalid_tss_handler);
 interrupt_handler!(11, segment_not_present, segment_not_present_handler);
 interrupt_handler!(12, stack_segment_fault, stack_segment_fault_handler);
 #[rustfmt::skip]
 interrupt_handler!(13,general_protection_fault, general_protection_fault_handler);
 interrupt_handler!(14, page_fault, page_fault_handler);
-interrupt_handler!(15, reserved_1, reserved_handler);
-interrupt_handler!(16, x87_floating_point, x87_floating_point_handler);
+interrupt_handler!(15, reserved_1, reserved_handler, 0);
+interrupt_handler!(16, x87_floating_point, x87_floating_point_handler, 0);
 interrupt_handler!(17, alignment_check, alignment_check_handler);
-interrupt_handler!(18, machine_check, machine_check_handler);
-interrupt_handler!(19, simd, simd_floating_point_handler);
-interrupt_handler!(20, virtualization, virtualization_handler);
+interrupt_handler!(18, machine_check, machine_check_handler, 0);
+interrupt_handler!(19, simd, simd_floating_point_handler, 0);
+interrupt_handler!(20, virtualization, virtualization_handler, 0);
 interrupt_handler!(21, control_protection, control_protection_handler);
-interrupt_handler!(22, reserved_2, reserved_handler);
-interrupt_handler!(23, reserved_3, reserved_handler);
-interrupt_handler!(24, reserved_4, reserved_handler);
-interrupt_handler!(25, reserved_5, reserved_handler);
-interrupt_handler!(26, reserved_6, reserved_handler);
-interrupt_handler!(27, reserved_7, reserved_handler);
-interrupt_handler!(28, hypervisor_injection, hypervisor_injection_handler);
+interrupt_handler!(22, reserved_2, reserved_handler, 0);
+interrupt_handler!(23, reserved_3, reserved_handler, 0);
+interrupt_handler!(24, reserved_4, reserved_handler, 0);
+interrupt_handler!(25, reserved_5, reserved_handler, 0);
+interrupt_handler!(26, reserved_6, reserved_handler, 0);
+interrupt_handler!(27, reserved_7, reserved_handler, 0);
+interrupt_handler!(28, hypervisor_injection, hypervisor_injection_handler, 0);
 interrupt_handler!(29, vmm_communication, vmm_communication_handler);
 interrupt_handler!(30, security_exception, security_exception_handler);
-interrupt_handler!(31, reserved_8, reserved_handler);
+interrupt_handler!(31, reserved_8, reserved_handler, 0);
