@@ -1,5 +1,3 @@
-use log::debug;
-
 use crate::arch::paging;
 use crate::x86_64::address::Virtual;
 use crate::x86_64::cpu::Privilege;
@@ -110,7 +108,10 @@ pub extern "C" fn stack_segment_fault_handler(_state: State) {
 }
 
 pub extern "C" fn general_protection_fault_handler(state: State) {
-    panic!("General protection fault (error code: 0x{:02x})", state.code);
+    panic!(
+        "General protection fault (error code: 0x{:02x})",
+        state.code
+    );
 }
 
 pub extern "C" fn page_fault_handler(state: State) {

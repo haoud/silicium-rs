@@ -16,7 +16,7 @@ impl Selector {
     /// privilege is the privilege level used for this segment.
     #[must_use]
     pub const fn new(index: u16, privilege: Privilege) -> Self {
-        Self((index * 0x10) | (privilege as u16))
+        Self((index * 8) | (privilege as u16))
     }
 
     #[must_use]

@@ -32,17 +32,59 @@ impl<const N: usize> Table<N> {
     }
 
     /// Set the GDT entry at the given index to the given descriptor.
+    /// 
+    /// # Warning
+    /// If you set a system descriptor (i.e. a TSS descriptor), remember that it requires two GDT
+    /// entries ! If you want to add a descriptor after a system descriptor, you need increment the
+    /// index by 2.
+    /// ```rust
+    /// let mut gdt = Table::<8>::new();
+    /// gdt.set_descriptor(0, &Descriptor::NULL);
+    /// gdt.set_descriptor(1, &Descriptor::KERNEL_CODE64);
+    /// gdt.set_descriptor(2, &Descriptor::KERNEL_DATA);
+    /// gdt.set_descriptor(3, &Descriptor::USER_CODE64);
+    /// gdt.set_descriptor(4, &Descriptor::USER_DATA);
+    /// // This is a system descriptor (TSS descriptor), not initialized for simplicity
+    /// // of the example. It requires two GDT entries.
+    /// gdt.set_descriptor(5, &Descriptor::System(0, 0)));
+    /// // The 6th entry is used by the TSS descriptor
+    /// // The 7th entry is available and can be used by a new descriptor like this:
+    /// gdt.set_descriptor(7, &Descriptor::KERNEL_CODE64);
+    /// ```
+    ///
+    /// # Panics
+    /// This function panics if the index is out of bounds (i.e. greater than or equal to the
+    /// GDT's capacity) or if the entry is already in use.
+    pub fn set_descriptor(&mut self, index: usize, descriptor: &Descriptor) {
+        assert!(index < N, "out of bounds index when setting a GDT entry");
+        if let Descriptor::Segment(x) = descriptor {
+            assert!(
+                self.descriptors[index] == Entry::NULL,
+                "GDT entry is already in use"
+            );
+            self.descriptors[index] = Entry::new(*x);
+        } else if let Descriptor::System(x, y) = descriptor {
+            assert!(
+                self.descriptors[index + 1] == Entry::NULL,
+                "GDT entry is already in use"
+            );
+            assert!(
+                self.descriptors[index] == Entry::NULL,
+                "GDT entry is already in use"
+            );
+            self.descriptors[index + 1] = Entry::new(*y);
+            self.descriptors[index] = Entry::new(*x);
+        }
+    }
+
+    /// Clear the GDT entry at the given index.
     ///
     /// # Panics
     /// This function panics if the index is out of bounds (i.e. greater than or equal to the
     /// GDT's capacity)
-    pub fn set(&mut self, index: usize, descriptor: &Descriptor) {
-        assert!(index < N, "out of bounds index when setting a GDT entry");
-        if let Descriptor::Segment(x) = descriptor {
-            self.descriptors[index] = Entry::new(*x, 0);
-        } else if let Descriptor::System(x, y) = descriptor {
-            self.descriptors[index] = Entry::new(*x, *y);
-        }
+    pub fn clear_entry(&mut self, index: usize) {
+        assert!(index < N, "out of bounds index when clearing a GDT entry");
+        self.descriptors[index] = Entry::NULL;
     }
 
     /// Set the GDT register to point to the GDT and load it into the CPU.
@@ -136,14 +178,14 @@ impl DescriptorFlags {
     }
 }
 
-#[derive(Debug, Clone)]
-#[repr(C, packed(8))]
-struct Entry(u64, u64);
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(transparent)]
+struct Entry(u64);
 
 impl Entry {
-    const NULL: Self = Self(0, 0);
-    const fn new(x: u64, y: u64) -> Self {
-        Self(x, y)
+    const NULL: Self = Self(0);
+    const fn new(x: u64) -> Self {
+        Self(x)
     }
 }
 
@@ -154,13 +196,13 @@ mod test {
     #[test]
     fn struct_size_checks() {
         assert_eq!(size_of::<super::Register>(), 10);
-        assert_eq!(size_of::<super::Entry>(), 16);
+        assert_eq!(size_of::<super::Entry>(), 8);
     }
 
     #[test]
     #[should_panic]
     fn gdt_out_of_bounds_access() {
         let mut gdt = super::Table::<8192>::new();
-        gdt.set(8192, &super::Descriptor::NULL);
+        gdt.set_descriptor(8192, &super::Descriptor::NULL);
     }
 }

@@ -99,7 +99,7 @@ impl Descriptor {
     /// - The descriptor is not marked as present
     /// - The handler address is set to 0
     /// - The descriptor flags are set to the default flags (see [`DescriptorFlags::new`])
-    /// - The segment selector is set to the kernel code segment (0x10)
+    /// - The segment selector is set to the kernel code segment
     #[must_use]
     pub const fn missing() -> Self {
         Self {
@@ -139,7 +139,7 @@ impl Descriptor {
     }
 
     /// Set the segment selector that will be loaded into the CS register when the handler is
-    /// invoked. The default is the kernel code segment (0x10)
+    /// invoked. The default is the kernel code segment
     #[must_use]
     pub fn set_selector(&mut self, selector: Selector) -> &mut Self {
         self.selector = selector.value();
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn interrupt_enter() {
         cld
 
         # Swap gs if needed
-        cmp QWORD PTR [rsp + 8 * 2], 0x10    # 0x10 is the selector for the CS kernel selector
+        cmp QWORD PTR [rsp + 8 * 2], 0x08    # 0x08 is the selector for the CS kernel selector
         je 1f
         swapgs
        1:
@@ -367,7 +367,6 @@ pub unsafe extern "C" fn interrupt_enter() {
         # Save FS
         push fs
         # TODO: Set FS to the right value 
-        # mov fs, 0x50
 
         # Stack should be aligned on a 16 bytes boundary
         # Prepare the argument for the handler
@@ -423,7 +422,7 @@ pub unsafe extern "C" fn interrupt_exit() {
 
         # Swapgs if necessary
         cli                              # To avoid race condition
-        cmp QWORD PTR [rsp + 8], 0x10    # 0x10 is the selector for the CS kernel selector
+        cmp QWORD PTR [rsp + 8], 0x08    # 0x08 is the selector for the CS kernel selector
         je 1f
         swapgs
        1:

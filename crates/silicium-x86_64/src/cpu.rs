@@ -1,5 +1,6 @@
 use core::arch::asm;
 
+#[derive(Debug)]
 #[repr(C)]
 pub struct State {
     // FS are saved because both the kernel and the user use it for TLS. Normally, the kernel should
