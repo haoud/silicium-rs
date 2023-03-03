@@ -1,0 +1,6 @@
+[submodule "crates/silicium-x86_64"]
+	path = crates/silicium-x86_64
+	url = https://github.com/haoud/silicium-x86_64
+[submodule "crates/silicium-sync"]
+	path = crates/silicium-sync
+	url = https://github.com/haoud/silicium-sync
