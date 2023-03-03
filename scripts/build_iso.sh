@@ -8,7 +8,14 @@ die() {
 [ -e ./README.md ]   \
     || die "you must run this script from the root of the repository"
 
-# Copy the limine bootloader
+# Check that limine is installed
+if [ ! -e bin/src/limine/limine-cd-efi.bin ] || 
+   [ ! -e bin/src/limine/limine-cd.bin ] ||
+   [ ! -e bin/src/limine/limine.sys ]; then
+    die "Limine is not installed. Run ./scripts/build_limine.sh to install it"
+fi
+
+# Copy the limine bootloader inside the ISO directory
 cp -v                                   \
     bin/src/limine/limine-cd-efi.bin    \
     bin/src/limine/limine-cd.bin        \
