@@ -76,16 +76,23 @@ dependencies = [
  "linked_list_allocator",
  "log",
  "silicium-sync",
- "silicium-x86_64",
+ "silicium-x86_64 0.1.0",
 ]
 
 [[package]]
 name = "silicium-sync"
 version = "0.1.0"
-source = "git+https://github.com/haoud/silicium-sync#8396ea9bb0079a4aa775aec76a952d6e6ecf58cd"
 dependencies = [
  "lock_api",
- "silicium-x86_64",
+ "silicium-x86_64 0.1.0 (git+https://github.com/haoud/silicium-x86_64)",
+]
+
+[[package]]
+name = "silicium-x86_64"
+version = "0.1.0"
+dependencies = [
+ "bitfield",
+ "bitflags",
 ]
 
 [[package]]
