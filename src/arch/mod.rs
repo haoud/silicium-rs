@@ -5,6 +5,13 @@ pub mod idt;
 pub mod paging;
 pub mod tss;
 
+#[no_mangle]
+pub unsafe extern "C" fn _start() -> ! {
+    core::arch::asm!("xor rbp, rbp");       // Clear the base pointer (useful for backtraces)
+    crate::log::init();
+    crate::start();
+}
+
 /// Initialize the BSP. This is called by the kernel before any other initialization
 /// is done. This function is responsible for setting up the GDT, IDT, TSS, exceptions...
 pub fn init_bsp() {

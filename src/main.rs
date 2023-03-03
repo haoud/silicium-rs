@@ -27,9 +27,7 @@ pub mod glue;
 pub mod log;
 pub mod mm;
 
-#[no_mangle]
-pub unsafe extern "C" fn start() -> ! {
-    log::init();
+pub unsafe fn start() -> ! {
     info!("Booting Silicium...");
     assert!(
         LIMINE_MEMMAP.get_response().get().is_some(),
