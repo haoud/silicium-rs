@@ -1,7 +1,7 @@
-use crate::sync::spin::Spinlock;
-use crate::x86_64::gdt;
-use crate::x86_64::segment;
-use crate::x86_64::tss::TaskStateSegment;
+use sync::spin::Spinlock;
+use x86_64::gdt;
+use x86_64::segment;
+use x86_64::tss::TaskStateSegment;
 
 static TSS: Spinlock<TaskStateSegment> = Spinlock::new(TaskStateSegment::new());
 static GDT: Spinlock<gdt::Table<8>> = Spinlock::new(gdt::Table::new());

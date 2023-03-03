@@ -1,8 +1,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::ops::Deref;
 use core::ptr;
-
-use crate::sync::spin::SpinlockIrq;
+use sync::spin::SpinlockIrq;
 
 pub struct Locked {
     inner: SpinlockIrq<linked_list_allocator::Heap>,

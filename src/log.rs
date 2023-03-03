@@ -1,6 +1,6 @@
-use crate::sync::spin::SpinlockIrq;
-use crate::x86_64::serial::{Port, Serial};
 use core::fmt::Write;
+use sync::spin::SpinlockIrq;
+use x86_64::serial::{Port, Serial};
 
 pub struct SiliciumLogger;
 

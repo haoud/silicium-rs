@@ -1,6 +1,5 @@
-use silicium_internal::x86_64::paging::PAGE_SIZE;
-
 use crate::arch::address::phys_to_virt;
+use x86_64::paging::PAGE_SIZE;
 
 use super::{AllocationFlags, Frame, FrameFlags, Stats};
 

@@ -2,7 +2,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use bitflags::bitflags;
 
-use crate::x86_64::address::Physical;
+use x86_64::address::Physical;
 
 pub mod dummy_allocator;
 pub mod state;

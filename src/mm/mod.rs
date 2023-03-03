@@ -1,6 +1,7 @@
-use crate::{arch::paging, sync::spin::SpinlockIrq};
+use crate::arch::paging;
 use frame::Allocator;
 use limine::LimineMemmapRequest;
+use sync::spin::SpinlockIrq;
 
 pub mod allocator;
 pub mod frame;

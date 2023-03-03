@@ -1,10 +1,10 @@
 use crate::arch::paging;
-use crate::x86_64::address::Virtual;
-use crate::x86_64::cpu::Privilege;
-use crate::x86_64::idt::Descriptor;
-use crate::x86_64::idt::DescriptorFlags;
-use crate::x86_64::paging::PageFaultErrorCode;
-use crate::x86_64::{cpu::State, interrupt_handler};
+use x86_64::address::Virtual;
+use x86_64::cpu::Privilege;
+use x86_64::idt::Descriptor;
+use x86_64::idt::DescriptorFlags;
+use x86_64::paging::PageFaultErrorCode;
+use x86_64::{cpu::State, interrupt_handler};
 
 pub fn setup() {
     register_exception_handler(0, divide_by_zero);
@@ -116,7 +116,7 @@ pub extern "C" fn general_protection_fault_handler(state: State) {
 
 pub extern "C" fn page_fault_handler(state: State) {
     let code = PageFaultErrorCode::from_bits_truncate(state.code);
-    let addr = Virtual::new(crate::x86_64::cpu::read_cr2());
+    let addr = Virtual::new(x86_64::cpu::read_cr2());
 
     if let Err(reason) = paging::handle_page_fault(code, addr) {
         panic!(

@@ -1,4 +1,4 @@
-use crate::x86_64;
+use x86_64;
 
 #[cold]
 #[panic_handler]

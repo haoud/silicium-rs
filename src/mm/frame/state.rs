@@ -1,10 +1,7 @@
+use crate::arch::address::{phys_to_virt, virt_to_phys};
 use core::mem::size_of;
-
-use crate::{
-    arch::address::{phys_to_virt, virt_to_phys},
-    x86_64::address::{Physical, Virtual},
-};
 use limine::{LimineMemmapEntry, LimineMemoryMapEntryType, NonNullPtr};
+use x86_64::address::{Physical, Virtual};
 
 use crate::mm::frame::FrameFlags;
 

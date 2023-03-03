@@ -1,18 +1,17 @@
 use bitflags::bitflags;
 use log::trace;
 
-use crate::x86_64::paging::PageFaultErrorCode;
-
-use crate::x86_64::paging::{self, PAGE_MASK};
-use crate::{mm, x86_64};
-
+use crate::mm;
 use crate::mm::frame::{AllocationFlags, Allocator, Frame};
 use crate::mm::{frame, FRAME_ALLOCATOR, KERNEL_BASE};
-use crate::x86_64::address::{Physical, Virtual};
-use crate::x86_64::cpu;
-use crate::x86_64::paging::PageEntry;
-use crate::x86_64::paging::PageEntryFlags;
-use crate::x86_64::paging::PageTable;
+
+use x86_64::address::{Physical, Virtual};
+use x86_64::cpu;
+use x86_64::paging::PageEntry;
+use x86_64::paging::PageEntryFlags;
+use x86_64::paging::PageFaultErrorCode;
+use x86_64::paging::PageTable;
+use x86_64::paging::{self, PAGE_MASK};
 
 use super::address::phys_to_virt;
 
@@ -467,7 +466,7 @@ fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), Page
 }
 
 pub mod tlb {
-    use crate::x86_64::cpu;
+    use x86_64::cpu;
 
     /// Flushes the entire TLB. This is done by writing the current value of the CR3 register to it.
     /// This function should be used only when necessary, because the execution after this function

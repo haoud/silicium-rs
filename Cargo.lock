@@ -75,13 +75,6 @@ dependencies = [
  "limine",
  "linked_list_allocator",
  "log",
- "silicium-internal",
-]
-
-[[package]]
-name = "silicium-internal"
-version = "0.1.0"
-dependencies = [
  "silicium-sync",
  "silicium-x86_64",
 ]
@@ -89,6 +82,7 @@ dependencies = [
 [[package]]
 name = "silicium-sync"
 version = "0.1.0"
+source = "git+https://github.com/haoud/silicium-sync#8396ea9bb0079a4aa775aec76a952d6e6ecf58cd"
 dependencies = [
  "lock_api",
  "silicium-x86_64",
@@ -97,6 +91,7 @@ dependencies = [
 [[package]]
 name = "silicium-x86_64"
 version = "0.1.0"
+source = "git+https://github.com/haoud/silicium-x86_64#77c03a69748399dd4caa56903940d5720bc4bb0b"
 dependencies = [
  "bitfield",
  "bitflags",

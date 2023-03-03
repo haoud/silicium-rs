@@ -3,11 +3,10 @@ name = "silicium"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-members = ["crates/*"]
-
 [dependencies]
-silicium-internal = { path = "crates/silicium-internal" }
+x86_64 = { git = "https://github.com/haoud/silicium-x86_64", package = "silicium-x86_64" }
+sync = { git = "https://github.com/haoud/silicium-sync", package = "silicium-sync" }
+
 linked_list_allocator = "0.10.4"
 bitfield = "0.14.0"
 bitflags = "1.3.2"

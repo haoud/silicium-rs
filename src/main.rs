@@ -17,7 +17,6 @@ extern crate alloc;
 
 use ::log::info;
 use limine::{LimineHhdmRequest, LimineMemmapRequest};
-pub use silicium_internal::*;
 
 // Limine memory map request
 static mut LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);

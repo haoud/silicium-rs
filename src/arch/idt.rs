@@ -1,8 +1,8 @@
-use crate::sync::spin::SpinlockIrq;
-use crate::x86_64::cpu::{Privilege, State};
-use crate::x86_64::idt;
-use crate::x86_64::idt::{Descriptor, DescriptorFlags};
-use crate::x86_64::interrupt_handler;
+use sync::spin::SpinlockIrq;
+use x86_64::cpu::{Privilege, State};
+use x86_64::idt;
+use x86_64::idt::{Descriptor, DescriptorFlags};
+use x86_64::interrupt_handler;
 
 pub static IDT: SpinlockIrq<idt::Table> = SpinlockIrq::new(idt::Table::new());
 
