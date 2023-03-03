@@ -31,7 +31,7 @@ else
     die "No kernel executable found"
 fi
 
-    # Create the ISO
+# Create the ISO
 xorriso -as mkisofs -b boot/limine-cd.bin                   \
         -no-emul-boot -boot-load-size 4 -boot-info-table 	\
         --efi-boot boot/limine-cd-efi.bin 					\
