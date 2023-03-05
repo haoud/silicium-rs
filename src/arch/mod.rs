@@ -3,6 +3,7 @@ pub mod exception;
 pub mod gdt;
 pub mod idt;
 pub mod paging;
+pub mod smp;
 pub mod tss;
 
 #[no_mangle]

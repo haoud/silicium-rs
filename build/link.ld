@@ -25,6 +25,16 @@ SECTIONS
     }
 
     . = ALIGN(4096);
+    .per_cpu :
+    {
+        __per_cpu_start = .;
+        *(.tdata*)
+        *(.tbss*)
+        . = ALIGN(8);
+        __per_cpu_end = .;
+    }
+
+    . = ALIGN(4096);
     .bss (NOLOAD) :
     {
         *(.bss*)

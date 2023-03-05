@@ -7,7 +7,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![feature(asm_const)]
 #![feature(fn_traits)]
-#![feature(once_cell)]
+#![feature(thread_local)]
 #![feature(const_mut_refs)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
@@ -17,6 +17,8 @@ extern crate alloc;
 
 use ::log::info;
 use limine::{LimineHhdmRequest, LimineMemmapRequest};
+
+use crate::arch::smp;
 
 // Limine memory map request
 static mut LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);
@@ -40,6 +42,8 @@ pub unsafe fn start() -> ! {
 
     arch::init_bsp();
     mm::setup(&LIMINE_MEMMAP);
+    smp::bsp_setup();
+
     info!("Silicium booted successfully!");
     x86_64::cpu::freeze();
 }

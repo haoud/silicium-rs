@@ -3,8 +3,6 @@ use frame::Allocator;
 use limine::LimineMemmapRequest;
 use sync::spin::SpinlockIrq;
 
-use self::vmm::AllocationFlags;
-
 pub mod allocator;
 pub mod frame;
 pub mod vmm;
@@ -50,12 +48,4 @@ pub fn setup(mmap_request: &LimineMemmapRequest) {
     // but we need to terminate the initialization here.
     paging::setup();
     vmm::setup();
-
-    // Test the vmm allocator
-    let range = vmm::allocate(10_000, AllocationFlags::MAP).unwrap();
-    let ptr = range.start().as_mut_ptr::<u64>();
-    unsafe {
-        ptr.offset(5).write(42);
-    }
-    vmm::deallocate(range);
 }
