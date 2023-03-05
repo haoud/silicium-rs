@@ -38,7 +38,7 @@ impl Frame {
     }
 
     /// Creates a new frame from a u64 address.
-    /// 
+    ///
     /// # Panics
     /// Panics if the address is not page aligned (4 KiB aligned), or if the address is not a
     /// valid physical address (i.e. it is greater than 2^52)
@@ -65,7 +65,7 @@ impl Frame {
         address >= self.0 && address < self.0 + 4096usize
     }
 
-    /// Return the physical address of the frame. This is the address of the first byte of the 
+    /// Return the physical address of the frame. This is the address of the first byte of the
     /// frame, guaranteed to be page aligned.
     #[must_use]
     pub const fn start(&self) -> Physical {

@@ -63,9 +63,9 @@ impl FrameInfo {
         self.count
     }
 
-    /// Increment the frame count, meaning that the frame is used by another 
+    /// Increment the frame count, meaning that the frame is used by another
     /// object/structure/thread/etc.
-    /// 
+    ///
     /// # Panics
     /// Panics if the frame count overflows.
     pub fn retain(&mut self) {
@@ -77,7 +77,7 @@ impl FrameInfo {
 
     /// Decrement the frame count, meaning that the frame is no longer used by another
     /// object/structure/thread/etc.
-    /// 
+    ///
     /// # Panics
     /// Panics if the frame count is already 0, meaning that the frame is not retained but
     /// [`release`] is called.

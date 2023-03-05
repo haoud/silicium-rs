@@ -8,8 +8,8 @@ pub mod tss;
 
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {
-    core::arch::asm!("xor rbp, rbp");   // Clear the base pointer (useful for backtraces)
-    // Clear FS and GS registers
+    core::arch::asm!("xor rbp, rbp"); // Clear the base pointer (useful for backtraces)
+                                      // Clear FS and GS registers
     core::arch::asm!("mov fs, {0:e}", in(reg) 0);
     core::arch::asm!("mov gs, {0:e}", in(reg) 0);
     crate::log::init();

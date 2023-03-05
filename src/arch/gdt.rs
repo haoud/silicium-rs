@@ -32,7 +32,7 @@ pub fn setup() {
     }
 }
 
-/// Setup the GDT for the current CPU and load it into the CPU. The GDT created by this function is 
+/// Setup the GDT for the current CPU and load it into the CPU. The GDT created by this function is
 /// a classic `x86_64` GDT, with 6 entries:
 /// - NULL descriptor
 /// - Kernel 64 bits code descriptor
