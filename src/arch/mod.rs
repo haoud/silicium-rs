@@ -7,7 +7,7 @@ pub mod tss;
 
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {
-    core::arch::asm!("xor rbp, rbp");       // Clear the base pointer (useful for backtraces)
+    core::arch::asm!("xor rbp, rbp"); // Clear the base pointer (useful for backtraces)
     crate::log::init();
     crate::start();
 }

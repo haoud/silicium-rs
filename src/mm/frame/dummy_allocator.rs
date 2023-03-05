@@ -1,5 +1,5 @@
 use crate::arch::address::phys_to_virt;
-use x86_64::paging::PAGE_SIZE;
+use x86_64::{paging::PAGE_SIZE, address::Address};
 
 use super::{AllocationFlags, Frame, FrameFlags, Stats};
 

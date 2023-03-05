@@ -5,7 +5,7 @@ use crate::mm;
 use crate::mm::frame::{AllocationFlags, Allocator, Frame};
 use crate::mm::{frame, FRAME_ALLOCATOR, KERNEL_BASE};
 
-use x86_64::address::{Physical, Virtual};
+use x86_64::address::{Physical, Virtual, Address};
 use x86_64::cpu;
 use x86_64::paging::PageEntry;
 use x86_64::paging::PageEntryFlags;

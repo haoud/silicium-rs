@@ -2,7 +2,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use bitflags::bitflags;
 
-use x86_64::address::Physical;
+use x86_64::address::{Physical, Address};
 
 pub mod dummy_allocator;
 pub mod state;
@@ -186,14 +186,14 @@ impl Range {
 
     /// Check if the range contains the given address.
     #[must_use]
-    pub const fn contains_address(&self, address: Physical) -> bool {
+    pub fn contains_address(&self, address: Physical) -> bool {
         address.as_u64() >= self.start.address.as_u64()
             && address.as_u64() < self.end.address.as_u64()
     }
 
     /// Check if the range contains the given frame address.
     #[must_use]
-    pub const fn contains(&self, frame: Frame) -> bool {
+    pub fn contains(&self, frame: Frame) -> bool {
         frame.address.as_u64() >= self.start.address.as_u64()
             && frame.address.as_u64() < self.end.address.as_u64()
     }
@@ -201,19 +201,19 @@ impl Range {
     /// Returns the number of frames in the range.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
-    pub const fn count(&self) -> usize {
+    pub fn count(&self) -> usize {
         (self.end.address.as_u64() - self.start.address.as_u64()) as usize / 4096
     }
 
     /// Returns the length of the range, in frames.
     #[must_use]
-    pub const fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.count()
     }
 
     /// Check if the range is empty.
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.start.address.as_u64() >= self.end.address.as_u64()
     }
 }

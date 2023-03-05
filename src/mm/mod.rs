@@ -5,6 +5,7 @@ use sync::spin::SpinlockIrq;
 
 pub mod allocator;
 pub mod frame;
+pub mod vmm;
 
 pub const KERNEL_BASE: u64 = 0xFFFF_8000_0000_0000;
 
