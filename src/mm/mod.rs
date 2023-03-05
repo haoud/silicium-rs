@@ -1,6 +1,5 @@
 use crate::arch::paging;
 use frame::Allocator;
-use limine::LimineMemmapRequest;
 use sync::spin::SpinlockIrq;
 
 pub mod allocator;
@@ -34,10 +33,15 @@ static HEAP_ALLOCATOR: allocator::Locked =
 
 /// Setup the memory manager of the kernel. Currently, this function is responsible for setting up
 /// the frame allocator, initializing the heap and terminating the paging initialization.
-pub fn setup(mmap_request: &LimineMemmapRequest) {
-    let statistic = FRAME_STATE
-        .lock()
-        .setup(mmap_request.get_response().get().unwrap().memmap());
+///
+/// # Warning
+/// If an interrupt occurs during this function, the kernel will panic, because this function is
+/// called before everything is initialized, and therefore, the interrupt handler will not be
+/// initialized.
+pub fn setup() {
+    let mmap = crate::LIMINE_MEMMAP.get_response().get().unwrap().memmap();
+    let statistic = FRAME_STATE.lock().setup(mmap);
+    
     FRAME_ALLOCATOR.lock().setup(statistic);
     unsafe {
         HEAP_ALLOCATOR.lock().init(HEAP_START as *mut u8, HEAP_SIZE);

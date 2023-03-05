@@ -3,11 +3,14 @@ use x86_64::gdt;
 use x86_64::segment;
 use x86_64::tss::TaskStateSegment;
 
+#[thread_local]
 static TSS: Spinlock<TaskStateSegment> = Spinlock::new(TaskStateSegment::new());
+
+#[thread_local]
 static GDT: Spinlock<gdt::Table<8>> = Spinlock::new(gdt::Table::new());
 
-/// Setup the GDT and load it into the CPU. The GDT created by this function is a classic `x86_64`
-/// GDT, with 6 entries:
+/// Setup the GDT for the current CPU and load it into the CPU. The GDT created by this function is
+/// a classic `x86_64` GDT, with 6 entries:
 /// - NULL descriptor
 /// - Kernel 64 bits code descriptor
 /// - Kernel data descriptor
@@ -28,11 +31,6 @@ pub fn setup() {
             &segment::Selector::KERNEL_CODE64,
             &segment::Selector::KERNEL_DATA,
         );
-
-        // Load 0 in the FS and GS registers. This is required to avoid a GPF, because Limine has
-        // set the FS and GS registers to 0x30, which is not a valid segment selector with our GDT.
-        // FS and GS base will be set later by the TLS code using CPU MSR.
-        core::arch::asm!("mov fs, {0:x}", "mov gs, {0:x}", in(reg) 0, options(nomem, nostack, preserves_flags));
     }
 }
 

@@ -16,13 +16,11 @@
 extern crate alloc;
 
 use ::log::info;
-use limine::{LimineHhdmRequest, LimineMemmapRequest};
+use limine::{LimineHhdmRequest, LimineMemmapRequest, LimineSmpRequest};
 
-use crate::arch::smp;
-
-// Limine memory map request
-static mut LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);
-static mut LIMINE_HHDM: LimineHhdmRequest = LimineHhdmRequest::new(0);
+pub static LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);
+pub static LIMINE_HHDM: LimineHhdmRequest = LimineHhdmRequest::new(0);
+pub static LIMINE_SMP: LimineSmpRequest = LimineSmpRequest::new(0);
 
 pub mod arch;
 pub mod glue;
@@ -39,10 +37,16 @@ pub unsafe fn start() -> ! {
         LIMINE_HHDM.get_response().get().is_some(),
         "No high-half direct mapping provided by Limine!"
     );
+    assert!(
+        LIMINE_SMP.get_response().get().is_some(),
+        "No SMP information provided by Limine!"
+    );
 
+    // We initialize the memory manager as soon as possible to be able to allocate memory
+    // for the other components. This is risky (because if an interrupt occurs here, the kernel
+    // will panic), but for now it's okay.
+    mm::setup();
     arch::init_bsp();
-    mm::setup(&LIMINE_MEMMAP);
-    smp::bsp_setup();
 
     info!("Silicium booted successfully!");
     x86_64::cpu::freeze();

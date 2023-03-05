@@ -16,9 +16,11 @@ pub unsafe extern "C" fn _start() -> ! {
 /// Initialize the BSP. This is called by the kernel before any other initialization
 /// is done. This function is responsible for setting up the GDT, IDT, TSS, exceptions...
 pub fn init_bsp() {
-    gdt::setup();
+    // Install IDT and exceptions as soon as possible to be able to handle interrupts
     idt::setup();
-    tss::install();
     exception::setup();
-    // TODO: Setup thread-local storage
+
+    smp::bsp_setup();
+    gdt::setup();
+    tss::install();
 }
