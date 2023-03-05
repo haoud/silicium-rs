@@ -42,9 +42,11 @@ pub unsafe fn start() -> ! {
         "No SMP information provided by Limine!"
     );
 
-    // We initialize the memory manager as soon as possible to be able to allocate memory
-    // for the other components. This is risky (because if an interrupt occurs here, the kernel
-    // will panic), but for now it's okay.
+    // Install GDT, IDT and exceptions as soon as possible to be able to handle interrupts
+    arch::gdt::setup();
+    arch::idt::setup();
+    arch::exception::setup();
+
     mm::setup();
     arch::init_bsp();
 

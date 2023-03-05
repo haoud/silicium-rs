@@ -2,7 +2,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use bitflags::bitflags;
 
-use x86_64::address::Physical;
+use x86_64::{address::Physical, paging::PAGE_SIZE};
 
 pub mod dummy_allocator;
 pub mod state;
@@ -11,23 +11,17 @@ pub mod state;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NotAligned(Physical, usize);
 
-/// Represents a physical memory frame.
+/// Represents a physical memory frame. A Frame is a 4 KiB block of memory, and is the smallest
+/// unit of physical memory that can be allocated.
 #[derive(Debug, Clone, Copy, Hash)]
-pub struct Frame {
-    address: Physical,
-    flags: FrameFlags,
-    count: usize,
-}
+#[repr(transparent)]
+pub struct Frame(Physical);
 
 impl Frame {
     /// Creates a null frame
     #[must_use]
     pub const fn null() -> Self {
-        Self {
-            address: Physical::null(),
-            flags: FrameFlags::empty(),
-            count: 0,
-        }
+        Self(Physical::null())
     }
 
     /// Creates a new frame
@@ -35,29 +29,31 @@ impl Frame {
     /// # Panics
     /// Panics if the address is not page aligned (4 KiB aligned).
     #[must_use]
-    pub fn new(address: Physical, flags: FrameFlags) -> Self {
+    pub fn new(address: Physical) -> Self {
         assert!(
             address.is_page_aligned(),
             "Frame address must be page aligned!"
         );
-        Self {
-            address,
-            flags,
-            count: 0,
-        }
+        Self(address)
+    }
+
+    /// Creates a new frame from a u64 address.
+    /// 
+    /// # Panics
+    /// Panics if the address is not page aligned (4 KiB aligned), or if the address is not a
+    /// valid physical address (i.e. it is greater than 2^52)
+    #[must_use]
+    pub fn from_u64(address: u64) -> Self {
+        Self::new(Physical::new(address))
     }
 
     /// Try to create a new frame.
     ///
     /// # Errors
     /// Returns an [`NotAligned`] error if the address is not page aligned
-    pub fn try_new(address: Physical, flags: FrameFlags) -> Result<Self, NotAligned> {
+    pub fn try_new(address: Physical) -> Result<Self, NotAligned> {
         if address.is_page_aligned() {
-            Ok(Self {
-                address,
-                flags,
-                count: 0,
-            })
+            Ok(Self(address))
         } else {
             Err(NotAligned(address, 4096usize))
         }
@@ -66,42 +62,27 @@ impl Frame {
     /// Check if the frame contains the given address.
     #[must_use]
     pub fn contains(&self, address: Physical) -> bool {
-        address >= self.address && address < self.address + 4096usize
+        address >= self.0 && address < self.0 + 4096usize
     }
 
+    /// Return the physical address of the frame. This is the address of the first byte of the 
+    /// frame, guaranteed to be page aligned.
     #[must_use]
-    pub const fn address(&self) -> Physical {
-        self.address
+    pub const fn start(&self) -> Physical {
+        self.0
     }
 
-    pub fn remove_flags(&mut self, flags: FrameFlags) {
-        self.flags &= !flags;
-    }
-
-    pub fn add_flags(&mut self, flags: FrameFlags) {
-        self.flags |= flags;
-    }
-
-    pub fn set_flags(&mut self, flags: FrameFlags) {
-        self.flags = flags;
-    }
-
+    /// Return the size of the frame, which is always 4096.
     #[must_use]
-    pub const fn flags(&self) -> FrameFlags {
-        self.flags
+    pub const fn size(&self) -> usize {
+        PAGE_SIZE
     }
 
+    /// Return the physical address of the last byte of the frame. The returned address is not
+    /// included in the frame.
     #[must_use]
-    pub const fn count(&self) -> usize {
-        self.count
-    }
-
-    pub fn increment_count(&mut self) {
-        self.count += 1;
-    }
-
-    pub fn decrement_count(&mut self) {
-        self.count -= 1;
+    pub fn end(&self) -> Physical {
+        self.0 + self.size()
     }
 
     /// Create a range of frames. The range is semi-inclusive, meaning that the end frame is not
@@ -116,13 +97,13 @@ impl Add<u64> for Frame {
     type Output = Self;
 
     fn add(self, rhs: u64) -> Self::Output {
-        Self::new(self.address + rhs * 4096u64, self.flags)
+        Self::new(self.0 + rhs * 4096u64)
     }
 }
 
 impl AddAssign<u64> for Frame {
     fn add_assign(&mut self, rhs: u64) {
-        self.address += rhs * 4096u64;
+        self.0 += rhs * 4096u64;
     }
 }
 
@@ -130,13 +111,13 @@ impl Sub<u64> for Frame {
     type Output = Self;
 
     fn sub(self, rhs: u64) -> Self::Output {
-        Self::new(self.address - rhs * 4096u64, self.flags)
+        Self::new(self.0 - rhs * 4096u64)
     }
 }
 
 impl SubAssign<u64> for Frame {
     fn sub_assign(&mut self, rhs: u64) {
-        self.address -= rhs * 4096u64;
+        self.0 -= rhs * 4096u64;
     }
 }
 
@@ -197,22 +178,20 @@ impl Range {
     /// Check if the range contains the given address.
     #[must_use]
     pub fn contains_address(&self, address: Physical) -> bool {
-        address.as_u64() >= self.start.address.as_u64()
-            && address.as_u64() < self.end.address.as_u64()
+        address.as_u64() >= self.start.0.as_u64() && address.as_u64() < self.end.0.as_u64()
     }
 
     /// Check if the range contains the given frame address.
     #[must_use]
     pub fn contains(&self, frame: Frame) -> bool {
-        frame.address.as_u64() >= self.start.address.as_u64()
-            && frame.address.as_u64() < self.end.address.as_u64()
+        frame.0.as_u64() >= self.start.0.as_u64() && frame.0.as_u64() < self.end.0.as_u64()
     }
 
     /// Returns the number of frames in the range.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub fn count(&self) -> usize {
-        (self.end.address.as_u64() - self.start.address.as_u64()) as usize / 4096
+        (self.end.0.as_u64() - self.start.0.as_u64()) as usize / 4096
     }
 
     /// Returns the length of the range, in frames.
@@ -224,7 +203,7 @@ impl Range {
     /// Check if the range is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.start.address.as_u64() >= self.end.address.as_u64()
+        self.start.0.as_u64() >= self.end.0.as_u64()
     }
 }
 

@@ -10,7 +10,7 @@ use x86_64::{
 use crate::arch::paging::{self, map, MapError, MapFlags, PageFaultError};
 
 use super::{
-    frame::{self, Allocator, Frame, FrameFlags},
+    frame::{self, Allocator, Frame},
     FRAME_ALLOCATOR,
 };
 
@@ -124,9 +124,7 @@ pub fn deallocate(range: VirtualRange) {
                 let current = &mut *paging::active_table_mut();
                 let frame = paging::unmap(current, page);
                 if let Some(frame) = frame {
-                    FRAME_ALLOCATOR
-                        .lock()
-                        .deallocate(Frame::new(frame, FrameFlags::NONE));
+                    FRAME_ALLOCATOR.lock().deallocate(Frame::new(frame));
                 }
             }
         }
@@ -168,8 +166,8 @@ pub fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), 
             .ok_or(PageFaultError::OUT_OF_MEMORY)?;
         trace!(
             "Page fault handler: demand paging: {:016x} -> {:016x}",
-            addr.as_u64(),
-            frame.address().as_u64()
+            addr,
+            frame.start()
         );
         match map(table, addr, frame, paging_flags) {
             Ok(_) => Ok(()),

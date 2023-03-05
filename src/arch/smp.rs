@@ -1,6 +1,6 @@
 use core::mem::size_of;
 
-use x86_64::{cpu::msr, paging::PAGE_SIZE};
+use x86_64::cpu::msr;
 
 use crate::mm::vmm::{self, AllocationFlags};
 
@@ -40,10 +40,6 @@ unsafe fn allocate_thread_local_storage() {
 
     let alloc_flags = AllocationFlags::MAP | AllocationFlags::ZEROED;
     let alloc_size = per_cpu_size + size_of::<ThreadLocalInfo>();
-
-    // Some assertions to ensure that the per-cpu data is properly aligned
-    assert_eq!(per_cpu_start % PAGE_SIZE, 0);
-    assert_eq!(per_cpu_size % PAGE_SIZE, 0);
 
     let Ok(data) = vmm::allocate(alloc_size, alloc_flags) else {
         panic!("Failed to allocate {} bytes for thread local storage", alloc_size);

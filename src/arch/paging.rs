@@ -85,7 +85,7 @@ pub fn setup() {
                     .expect("Failed to allocate a frame for the kernel pml4 entry");
                 let flags = PageEntryFlags::PRESENT | PageEntryFlags::WRITABLE;
 
-                pml4_entry.set_address(frame.address());
+                pml4_entry.set_address(frame.start());
                 pml4_entry.set_flags(flags);
             }
         }
@@ -125,7 +125,7 @@ pub unsafe fn map(
         }
 
         // If no frame is given, allocate one
-        let frame = if frame.address().is_null() {
+        let frame = if frame.start().is_null() {
             FRAME_ALLOCATOR
                 .lock()
                 .allocate(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
@@ -140,7 +140,7 @@ pub unsafe fn map(
         // flush the TLB accordingly.
         // This is useful to avoid flushing the TLB too many times and saturating other cores with
         // TLB invalidation requests.
-        pte.set_address(frame.address());
+        pte.set_address(frame.start());
         pte.set_flags(flags);
         return Ok(());
     }
@@ -307,7 +307,7 @@ unsafe fn creat_and_fetch_pte(
         // in the last level is marked as writable.
         // TODO: Check if this is correct for `PageEntryFlags::USER` too
         entry.add_flags(PageEntryFlags::PRESENT | PageEntryFlags::WRITABLE);
-        entry.set_address(frame.address());
+        entry.set_address(frame.start());
     }
 
     // Check if we are at the last level
@@ -376,7 +376,6 @@ pub fn handle_page_fault(
     let pte = unsafe { fetch_pte(table, paging::Level::PageMapLevel4, addr) };
     let present = pte.map_or(false, PageEntry::is_present);
     let mut error = PageFaultError::UNKNOWN;
-
     if pte.is_some() {
         // Check if the page fault was caused by a lazy TLB invalidation
         // If it is the case, the error code will specify that the page was not present, but when we
@@ -450,8 +449,8 @@ fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), Page
 
             trace!(
                 "Page fault handler: demand paging: {:016x} -> {:016x}",
-                addr.as_u64(),
-                frame.address().as_u64()
+                addr,
+                frame.size()
             );
 
             map(table, addr, frame, MapFlags::PRESENT | MapFlags::WRITABLE).map_err(

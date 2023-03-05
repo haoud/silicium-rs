@@ -7,6 +7,88 @@ use crate::mm::frame::FrameFlags;
 
 use super::{Frame, Stats};
 
+/// Contains all information needed about a frame
+#[derive(Debug, Clone)]
+pub struct FrameInfo {
+    flags: FrameFlags,
+    frame: Frame,
+    count: u64,
+}
+
+impl FrameInfo {
+    /// Create a new frame info. By default, the frame count is set to 0 (meaning that the frame is
+    /// not used).
+    #[must_use]
+    pub const fn new(frame: Frame, flags: FrameFlags) -> Self {
+        Self {
+            frame,
+            flags,
+            count: 0,
+        }
+    }
+
+    /// Get a mutable reference to the frame.
+    #[must_use]
+    pub fn get_frame_mut(&mut self) -> &mut Frame {
+        &mut self.frame
+    }
+
+    /// Get a reference to the frame.
+    #[must_use]
+    pub fn get_frame(&self) -> &Frame {
+        &self.frame
+    }
+
+    /// Get a mutable reference to the frame flags.
+    #[must_use]
+    pub fn get_flags_mut(&mut self) -> &mut FrameFlags {
+        &mut self.flags
+    }
+
+    /// Get a reference to the frame flags.
+    #[must_use]
+    pub fn get_flags(&self) -> &FrameFlags {
+        &self.flags
+    }
+
+    /// Get a mutable reference to the frame count.
+    #[must_use]
+    pub fn get_count_mut(&mut self) -> &mut u64 {
+        &mut self.count
+    }
+
+    /// Get a reference to the frame count.
+    #[must_use]
+    pub fn get_count(&self) -> u64 {
+        self.count
+    }
+
+    /// Increment the frame count, meaning that the frame is used by another 
+    /// object/structure/thread/etc.
+    /// 
+    /// # Panics
+    /// Panics if the frame count overflows.
+    pub fn retain(&mut self) {
+        match self.count.checked_add(1) {
+            Some(count) => self.count = count,
+            None => panic!("Frame count overflow!"),
+        }
+    }
+
+    /// Decrement the frame count, meaning that the frame is no longer used by another
+    /// object/structure/thread/etc.
+    /// 
+    /// # Panics
+    /// Panics if the frame count is already 0, meaning that the frame is not retained but
+    /// [`release`] is called.
+    pub fn release(&mut self) {
+        match self.count.checked_sub(1) {
+            Some(count) => self.count = count,
+            None => panic!("Trying to release a frame that is not retained!"),
+        }
+    }
+}
+
 /// Represents the state of all physical memory frames. This state is used to keep track of which
 /// frames are allocated, free, etc.
 /// It is important to note that this state only store information about regular memory frames, and
@@ -15,7 +97,7 @@ use super::{Frame, Stats};
 /// frames (such as the framebuffer) at high addresses, frame out of the range of the array are
 /// considered as reserved/poisoned and should only be used if you know what you are doing.
 pub struct State<'a> {
-    state: &'a mut [Frame],
+    frames: &'a mut [FrameInfo],
 }
 
 impl<'a> State<'a> {
@@ -23,7 +105,7 @@ impl<'a> State<'a> {
     /// Attempting to use the state before calling [`setup`] will result in undefined behavior.
     #[must_use]
     pub const fn uninitialized() -> Self {
-        Self { state: &mut [] }
+        Self { frames: &mut [] }
     }
 
     /// Setup the frame state by parsing the memory map and filling the frame array.
@@ -33,16 +115,17 @@ impl<'a> State<'a> {
     /// Panics if the frame state is already initialized or if the frame array cannot be placed in
     /// the memory
     pub fn setup(&mut self, mmap: &[NonNullPtr<LimineMemmapEntry>]) -> Stats {
-        assert!(self.state.is_empty(), "Frame state already initialized!");
+        assert!(self.frames.is_empty(), "Frame state already initialized!");
 
         let last = Self::find_last_usable_frame_index(mmap);
         let array_location = Self::find_array_location(mmap, last);
+        log::debug!("Frame array location: {:#x}", array_location.as_u64());
         assert!(
             !array_location.is_null(),
             "Could not find a free region to place the frame array!"
         );
 
-        let array: &mut [Frame] =
+        let array: &mut [FrameInfo] =
             unsafe { core::slice::from_raw_parts_mut(array_location.as_mut_ptr(), last) };
         let mut stats = Stats::new();
 
@@ -61,7 +144,7 @@ impl<'a> State<'a> {
             if addr < 0x1000_0000 {
                 flags.insert(FrameFlags::X86);
             }
-            *frame = Frame::new(Physical::new(addr), flags);
+            *frame = FrameInfo::new(Frame::new(Physical::new(addr)), flags);
             stats.poisoned += 1;
             stats.total += 1;
         }
@@ -112,28 +195,30 @@ impl<'a> State<'a> {
             stats.kernel += 1;
         }
 
-        *self = State { state: array };
+        *self = State { frames: array };
         stats
     }
 
     #[must_use]
-    pub fn get_frame_info_mut(&mut self, address: u64) -> Option<&mut Frame> {
-        self.state.get_mut(super::index(address))
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_frame_info_mut(&mut self, address: Physical) -> Option<&mut FrameInfo> {
+        self.frames.get_mut(address.frame_index() as usize)
     }
 
     #[must_use]
-    pub fn get_frame_info(&self, address: u64) -> Option<&Frame> {
-        self.state.get(super::index(address))
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_frame_info(&self, address: Physical) -> Option<&FrameInfo> {
+        self.frames.get(address.frame_index() as usize)
     }
 
     #[must_use]
-    pub fn get_state_array_mut(&mut self) -> &mut [Frame] {
-        self.state
+    pub fn get_state_array_mut(&mut self) -> &mut [FrameInfo] {
+        self.frames
     }
 
     #[must_use]
-    pub fn get_state_array(&self) -> &[Frame] {
-        self.state
+    pub fn get_state_array(&self) -> &[FrameInfo] {
+        self.frames
     }
 
     /// Find in the memory map a free region that is big enough to hold the frame array. This is
@@ -142,7 +227,7 @@ impl<'a> State<'a> {
     #[must_use]
     fn find_array_location(mmap: &[NonNullPtr<LimineMemmapEntry>], last: usize) -> Virtual {
         // Find in the memory map a free region that is big enough to hold the frame array
-        let size = last * size_of::<Frame>();
+        let size = last * size_of::<FrameInfo>();
         mmap.iter()
             .filter(|entry| entry.typ == LimineMemoryMapEntryType::Usable)
             .find(|entry| entry.len >= size as u64)

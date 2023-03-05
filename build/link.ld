@@ -25,7 +25,7 @@ SECTIONS
     }
 
     . = ALIGN(4096);
-    .per_cpu :
+    .percpu :
     {
         __per_cpu_start = .;
         *(.tdata*)

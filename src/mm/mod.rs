@@ -41,8 +41,8 @@ static HEAP_ALLOCATOR: allocator::Locked =
 pub fn setup() {
     let mmap = crate::LIMINE_MEMMAP.get_response().get().unwrap().memmap();
     let statistic = FRAME_STATE.lock().setup(mmap);
-    
     FRAME_ALLOCATOR.lock().setup(statistic);
+
     unsafe {
         HEAP_ALLOCATOR.lock().init(HEAP_START as *mut u8, HEAP_SIZE);
     }
