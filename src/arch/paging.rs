@@ -5,7 +5,7 @@ use crate::mm;
 use crate::mm::frame::{AllocationFlags, Allocator, Frame};
 use crate::mm::{frame, FRAME_ALLOCATOR, KERNEL_BASE};
 
-use x86_64::address::{Physical, Virtual, Address};
+use x86_64::address::{Physical, Virtual};
 use x86_64::cpu;
 use x86_64::paging::PageEntry;
 use x86_64::paging::PageEntryFlags;
@@ -15,7 +15,7 @@ use x86_64::paging::{self, PAGE_MASK};
 
 use super::address::phys_to_virt;
 
-type MapFlags = PageEntryFlags;
+pub type MapFlags = PageEntryFlags;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapError {
@@ -50,6 +50,9 @@ bitflags! {
 
         /// Set if we ran out of memory while handling the fault
         const OUT_OF_MEMORY = 1 << 5;
+
+        /// Set if the demand paging failed because we cannot map the page safely
+        const NOT_MAPPABLE = 1 << 6;
     }
 }
 
@@ -461,7 +464,10 @@ fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), Page
             )?;
         }
         return Ok(());
+    } else if addr.as_u64() >= mm::VMALLOC_START && addr.as_u64() < mm::VMALLOC_END {
+        return crate::mm::vmm::handle_demand_paging(table, addr);
     }
+
     Err(PageFaultError::UNKNOWN)
 }
 

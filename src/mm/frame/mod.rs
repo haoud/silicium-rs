@@ -2,7 +2,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use bitflags::bitflags;
 
-use x86_64::address::{Physical, Address};
+use x86_64::address::Physical;
 
 pub mod dummy_allocator;
 pub mod state;
@@ -20,6 +20,16 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// Creates a null frame
+    #[must_use]
+    pub const fn null() -> Self {
+        Self {
+            address: Physical::null(),
+            flags: FrameFlags::empty(),
+            count: 0,
+        }
+    }
+
     /// Creates a new frame
     ///
     /// # Panics

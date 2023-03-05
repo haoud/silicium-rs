@@ -1,4 +1,4 @@
-use x86_64::address::{Physical, Virtual, Address};
+use x86_64::address::{Physical, Virtual};
 
 #[must_use]
 pub fn phys_to_virt(virt: Physical) -> Virtual {

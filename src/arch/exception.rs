@@ -1,5 +1,4 @@
 use crate::arch::paging;
-use x86_64::address::Address;
 use x86_64::address::Virtual;
 use x86_64::cpu::Privilege;
 use x86_64::idt::Descriptor;
