@@ -31,9 +31,9 @@ if [ -e target/x86_64/debug/silicium ] && [ -e target/x86_64/release/silicium ];
         cp -v target/x86_64/release/silicium iso/boot/silicium.elf
     fi
 elif [ -e target/x86_64/debug/silicium ]; then
-    cp -v target/x86_64/debug/silicium iso/silicium.elf
+    cp -v target/x86_64/debug/silicium iso/boot/silicium.elf
 elif [ -e target/x86_64/release/silicium ]; then
-    cp -v target/x86_64/release/silicium iso/silicium.elf
+    cp -v target/x86_64/release/silicium iso/boot/silicium.elf
 else
     die "No kernel executable found"
 fi
