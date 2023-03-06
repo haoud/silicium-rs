@@ -1,8 +1,10 @@
 use limine::LimineSmpInfo;
-use sync::spin::SpinlockIrq;
 use x86_64::{pic, pit::Pit};
 
-use crate::config::{self, KERNEL_HZ};
+use crate::{
+    config::{self, KERNEL_HZ},
+    Spinlock,
+};
 
 pub mod acpi;
 pub mod address;
@@ -14,7 +16,7 @@ pub mod paging;
 pub mod smp;
 pub mod tss;
 
-pub static PIT: SpinlockIrq<Pit> = SpinlockIrq::new(Pit::new(KERNEL_HZ));
+pub static PIT: Spinlock<Pit> = Spinlock::new(Pit::new(KERNEL_HZ));
 
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {

@@ -1,4 +1,4 @@
-use sync::spin::Spinlock;
+use crate::Spinlock;
 use x86_64::{cpu::Privilege, segment::Selector, tss::TaskStateSegment};
 
 const SELECTOR_BASE: usize = 6;

@@ -1,10 +1,11 @@
-use sync::spin::SpinlockIrq;
 use x86_64::cpu::{Privilege, State};
 use x86_64::idt;
 use x86_64::idt::{Descriptor, DescriptorFlags};
 use x86_64::interrupt_handler;
 
-pub static IDT: SpinlockIrq<idt::Table> = SpinlockIrq::new(idt::Table::new());
+use crate::Spinlock;
+
+pub static IDT: Spinlock<idt::Table> = Spinlock::new(idt::Table::new());
 
 /// Initializes the IDT and load it. This function must be called before enabling interrupts and
 /// install a default handler for all interrupts (see [`unknown_interrupt_handler`]).

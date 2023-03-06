@@ -1,6 +1,5 @@
-use crate::arch::paging;
+use crate::{arch::paging, Spinlock};
 use frame::Allocator;
-use sync::spin::SpinlockIrq;
 
 pub mod allocator;
 pub mod frame;
@@ -22,10 +21,10 @@ pub const HEAP_SIZE: usize = (HEAP_END - HEAP_START) as usize;
 #[allow(clippy::cast_possible_truncation)]
 pub const VMALLOC_SIZE: usize = (VMALLOC_END - VMALLOC_START) as usize;
 
-pub static FRAME_STATE: SpinlockIrq<frame::state::State> =
-    SpinlockIrq::new(frame::state::State::uninitialized());
-pub static FRAME_ALLOCATOR: SpinlockIrq<frame::dummy_allocator::Allocator> =
-    SpinlockIrq::new(frame::dummy_allocator::Allocator::new());
+pub static FRAME_STATE: Spinlock<frame::state::State> =
+    Spinlock::new(frame::state::State::uninitialized());
+pub static FRAME_ALLOCATOR: Spinlock<frame::dummy_allocator::Allocator> =
+    Spinlock::new(frame::dummy_allocator::Allocator::new());
 
 #[global_allocator]
 static HEAP_ALLOCATOR: allocator::Locked =

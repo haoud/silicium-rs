@@ -102,33 +102,25 @@ dependencies = [
  "limine",
  "linked_list_allocator",
  "log",
- "silicium-sync",
- "silicium-x86_64 0.1.0",
+ "silicium-x86_64",
+ "spin",
 ]
 
 [[package]]
-name = "silicium-sync"
+name = "silicium-x86_64"
 version = "0.1.0"
+dependencies = [
+ "bitfield",
+ "bitflags",
+]
+
+[[package]]
+name = "spin"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dccf47db1b41fa1573ed27ccf5e08e3ca771cb994f776668c5ebda893b248fc"
 dependencies = [
  "lock_api",
- "silicium-x86_64 0.1.0 (git+https://github.com/haoud/silicium-x86_64)",
-]
-
-[[package]]
-name = "silicium-x86_64"
-version = "0.1.0"
-dependencies = [
- "bitfield",
- "bitflags",
-]
-
-[[package]]
-name = "silicium-x86_64"
-version = "0.1.0"
-source = "git+https://github.com/haoud/silicium-x86_64#97a3e9ecb43188be2926949d9e4a0765adc60642"
-dependencies = [
- "bitfield",
- "bitflags",
 ]
 
 [[package]]

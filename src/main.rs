@@ -23,6 +23,8 @@ pub static LIMINE_HHDM: LimineHhdmRequest = LimineHhdmRequest::new(0);
 pub static LIMINE_RSDP: LimineRsdpRequest = LimineRsdpRequest::new(0);
 pub static LIMINE_SMP: LimineSmpRequest = LimineSmpRequest::new(0);
 
+type Spinlock<T> = spin::Mutex<T>;
+
 pub mod config;
 
 pub mod arch;

@@ -1,13 +1,15 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 use bitflags::bitflags;
 use log::trace;
-use sync::spin::SpinlockIrq;
 use x86_64::{
     address::{Virtual, VirtualRange},
     paging::{PageTable, PAGE_SIZE},
 };
 
-use crate::arch::paging::{self, map, MapError, MapFlags, PageFaultError};
+use crate::{
+    arch::paging::{self, map, MapError, MapFlags, PageFaultError},
+    Spinlock,
+};
 
 use super::{
     frame::{self, Allocator, Frame},
@@ -61,8 +63,8 @@ impl VirtualArea {
     }
 }
 
-static FREE_VMA: SpinlockIrq<BTreeMap<usize, Vec<VirtualArea>>> = SpinlockIrq::new(BTreeMap::new());
-static USED_VMA: SpinlockIrq<BTreeMap<Virtual, VirtualArea>> = SpinlockIrq::new(BTreeMap::new());
+static FREE_VMA: Spinlock<BTreeMap<usize, Vec<VirtualArea>>> = Spinlock::new(BTreeMap::new());
+static USED_VMA: Spinlock<BTreeMap<Virtual, VirtualArea>> = Spinlock::new(BTreeMap::new());
 
 /// Set the allocator of virtual memory.
 pub fn setup() {

@@ -1,8 +1,7 @@
-use sync::spin::Spinlock;
 use x86_64::gdt;
 use x86_64::segment;
 
-use crate::config;
+use crate::{config, Spinlock};
 
 pub static GDT: Spinlock<gdt::Table<{ 6 + config::MAX_CPU * 2 }>> =
     Spinlock::new(gdt::Table::new());
