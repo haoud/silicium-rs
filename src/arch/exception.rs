@@ -64,7 +64,9 @@ pub extern "C" fn debug_handler(_state: State) {
 }
 
 pub extern "C" fn non_maskable_interrupt_handler(_state: State) {
-    panic!("Non-maskable interrupt");
+    // Just freeze the CPU. This is used by the panic function to halt other core.
+    // This is a temporary solution, but it works.
+    x86_64::cpu::freeze();
 }
 
 pub extern "C" fn breakpoint_handler(_state: State) {

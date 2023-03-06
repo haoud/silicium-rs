@@ -3,7 +3,7 @@
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.command": "clippy",
     "editor.semanticTokenColorCustomizations": {
-        "enabled": true
+        "enabled": true,
     },
     "editor.inlayHints.enabled": "offUnlessPressed",
     "editor.rulers": [

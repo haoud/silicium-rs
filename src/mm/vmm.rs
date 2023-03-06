@@ -198,7 +198,7 @@ fn find_free_first_fit(size: usize) -> Option<VirtualArea> {
     let mut free_vmas = FREE_VMA.lock();
     let mut vma = free_vmas
         .iter_mut()
-        .find(|(len, _)| **len >= size)
+        .find(|(len, vec)| **len >= size && !vec.is_empty())
         .map(|(_, vma_list)| vma_list)?
         .pop()
         .unwrap();

@@ -43,13 +43,14 @@ pub fn bsp_setup() {
 
 /// This function is called by the APs when they start. It will initialize the current core and
 /// signal to the BSP when the core is ready.
-/// 
+///
 /// This function should not be called directly, but only by the `_ap_start` function.
 pub fn ap_start(smp_info: &LimineSmpInfo) -> ! {
     super::gdt::reload();
     super::idt::reload();
     unsafe {
         allocate_thread_local_storage(smp_info);
+        x86_64::lapic::enable();
     }
     super::tss::install(smp_info.processor_id as usize);
 

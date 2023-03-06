@@ -1,4 +1,7 @@
 use limine::LimineSmpInfo;
+use x86_64::pic;
+
+use crate::config;
 
 pub mod acpi;
 pub mod address;
@@ -32,4 +35,7 @@ pub extern "C" fn _ap_start(info: *const LimineSmpInfo) -> ! {
 pub fn init_bsp() {
     smp::bsp_setup();
     tss::install(0);
+    unsafe {
+        pic::remap(config::IRQ_BASE);
+    }
 }

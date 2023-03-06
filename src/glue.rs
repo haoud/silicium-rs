@@ -1,9 +1,9 @@
-use x86_64;
+use x86_64::{self, lapic::{IpiDestination, IpiPriority, self}};
 
 #[cold]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    // TODO: Halt other cores
+    halt_other_core();
     // TODO: Dump stack trace
     // TODO: Dump registers
     // TODO: Dump memory
@@ -16,4 +16,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[alloc_error_handler]
 fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
     panic!("Allocation error: {:?}", layout)
+}
+
+fn halt_other_core() {
+    if lapic::initialized() {
+        unsafe {
+            x86_64::lapic::send_ipi(IpiDestination::OtherCores, IpiPriority::Normal, 2);
+        }
+    }
 }

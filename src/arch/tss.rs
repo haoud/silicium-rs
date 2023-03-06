@@ -1,5 +1,5 @@
 use sync::spin::Spinlock;
-use x86_64::{cpu::Privilege, segment, tss::TaskStateSegment};
+use x86_64::{cpu::Privilege, segment::Selector, tss::TaskStateSegment};
 
 const SELECTOR_BASE: usize = 6;
 
@@ -11,9 +11,10 @@ static TSS: Spinlock<TaskStateSegment> = Spinlock::new(TaskStateSegment::new());
 pub fn install(id: usize) {
     unsafe {
         let index = SELECTOR_BASE + id * 2;
+        let selector = Selector::new(u16::try_from(index).unwrap(), Privilege::Ring0);
         super::gdt::GDT
             .lock()
             .set_descriptor(index, &x86_64::gdt::Descriptor::tss(&TSS.lock()));
-        x86_64::cpu::ltr(segment::Selector::new(index as u16, Privilege::Ring0).value());
+        x86_64::cpu::ltr(selector.value());
     }
 }

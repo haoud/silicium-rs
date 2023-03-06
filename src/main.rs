@@ -53,12 +53,17 @@ pub unsafe fn start() -> ! {
     arch::gdt::setup();
     arch::idt::setup();
     arch::exception::setup();
-
+    
     // Initialise the memory subsystem
     mm::setup();
 
-    // Initialise the BSP, and start the other CPUs
+    // Initialise the BSP and external devices
     arch::init_bsp();
+
+    // Setup ACPI and everything related to it (LAPIC, HPET, etc.)
+    arch::acpi::setup();
+
+    // Initialise the APs
     arch::smp::start_cpus();
 
     info!("Silicium booted successfully!");
