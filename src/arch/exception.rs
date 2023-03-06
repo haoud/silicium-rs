@@ -118,7 +118,7 @@ pub extern "C" fn general_protection_fault_handler(state: State) {
 
 pub extern "C" fn page_fault_handler(state: State) {
     let code = PageFaultErrorCode::from_bits_truncate(state.code);
-    let addr = Virtual::new(x86_64::cpu::read_cr2());
+    let addr = Virtual::new(x86_64::cpu::cr2::read());
 
     if let Err(reason) = paging::handle_page_fault(code, addr) {
         panic!(

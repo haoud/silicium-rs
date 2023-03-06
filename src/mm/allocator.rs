@@ -40,7 +40,7 @@ unsafe impl GlobalAlloc for Locked {
         x86_64::irq::without(|| {
             self.inner
                 .lock()
-                .deallocate(ptr::NonNull::new_unchecked(ptr), layout)
+                .deallocate(ptr::NonNull::new_unchecked(ptr), layout);
         });
     }
 }

@@ -57,6 +57,9 @@ pub unsafe fn start() -> ! {
     arch::irq::setup();
     arch::exception::setup();
 
+    let a = x86_64::tsc::read();
+    ::log::debug!("TSC: {}", a);
+
     // Initialise the memory subsystem
     mm::setup();
 
