@@ -16,11 +16,14 @@
 extern crate alloc;
 
 use ::log::info;
-use limine::{LimineHhdmRequest, LimineMemmapRequest, LimineSmpRequest};
+use limine::{LimineHhdmRequest, LimineMemmapRequest, LimineRsdpRequest, LimineSmpRequest};
 
 pub static LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);
 pub static LIMINE_HHDM: LimineHhdmRequest = LimineHhdmRequest::new(0);
+pub static LIMINE_RSDP: LimineRsdpRequest = LimineRsdpRequest::new(0);
 pub static LIMINE_SMP: LimineSmpRequest = LimineSmpRequest::new(0);
+
+pub mod config;
 
 pub mod arch;
 pub mod glue;
@@ -38,6 +41,10 @@ pub unsafe fn start() -> ! {
         "No high-half direct mapping provided by Limine!"
     );
     assert!(
+        LIMINE_RSDP.get_response().get().is_some(),
+        "No RSDP provided by Limine!"
+    );
+    assert!(
         LIMINE_SMP.get_response().get().is_some(),
         "No SMP information provided by Limine!"
     );
@@ -47,8 +54,12 @@ pub unsafe fn start() -> ! {
     arch::idt::setup();
     arch::exception::setup();
 
+    // Initialise the memory subsystem
     mm::setup();
+
+    // Initialise the BSP, and start the other CPUs
     arch::init_bsp();
+    arch::smp::start_cpus();
 
     info!("Silicium booted successfully!");
     x86_64::cpu::freeze();

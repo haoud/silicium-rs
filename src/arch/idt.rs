@@ -6,8 +6,8 @@ use x86_64::interrupt_handler;
 
 pub static IDT: SpinlockIrq<idt::Table> = SpinlockIrq::new(idt::Table::new());
 
-/// Initializes the IDT. This function must be called before enabling interrupts and install
-/// a default handler for all interrupts (see [`unknown_interrupt_handler`]).
+/// Initializes the IDT and load it. This function must be called before enabling interrupts and
+/// install a default handler for all interrupts (see [`unknown_interrupt_handler`]).
 /// Each interrupt handler must be generated with the [`interrupt_handler!`] macro.
 pub fn setup() {
     let mut idt = IDT.lock();
@@ -26,6 +26,11 @@ pub fn setup() {
         );
     }
     idt.load();
+}
+
+/// Reload the current IDT into the current CPU.
+pub fn reload() {
+    IDT.lock().load();
 }
 
 /// Default handler for all interrupts. This function is called when an interrupt occurs but no

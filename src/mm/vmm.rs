@@ -91,16 +91,6 @@ pub fn allocate(size: usize, flags: AllocationFlags) -> Result<VirtualRange, All
         unimplemented!("Atomic allocation is not implemented yet.");
     }
 
-    // If the vma is bigger than the requested size, split it
-    if vma.range.size() > aligned_size {
-        let new_vma = VirtualArea::new(
-            VirtualRange::new(vma.range.start() + aligned_size, vma.range.end()),
-            Flags::NONE,
-        );
-        vma.range = VirtualRange::new(vma.range.start(), vma.range.start() + aligned_size);
-        insert_free_vma(new_vma);
-    }
-
     vma.flags = Flags::from_bits_truncate(flags.bits);
     insert_used_vma(vma);
     Ok(range)
@@ -129,6 +119,7 @@ pub fn deallocate(range: VirtualRange) {
             }
         }
     }
+    // TODO: Merge with adjacent free vma
     insert_free_vma(vma);
 }
 
@@ -196,17 +187,39 @@ fn insert_used_vma(vma: VirtualArea) {
     USED_VMA.lock().insert(vma.range.start(), vma);
 }
 
-/// Find the first free vma that is big enough to allocate the requested size, and remove it from
-/// the free vma list.
+/// Find the first free vma that is big enough to allocate the requested size, remove it from
+/// the free vma list, split it if necessary and replace it in the free vma list, and return the
+/// allocated vma.
 ///
 /// # Returns
 /// The first free vma that is big enough to allocate the requested size, or `None` if no such vma
 /// exists.
 fn find_free_first_fit(size: usize) -> Option<VirtualArea> {
-    FREE_VMA
-        .lock()
+    let mut free_vmas = FREE_VMA.lock();
+    let mut vma = free_vmas
         .iter_mut()
         .find(|(len, _)| **len >= size)
         .map(|(_, vma_list)| vma_list)?
         .pop()
+        .unwrap();
+
+    // If the vma is bigger than the requested size, split it
+    if vma.range.size() > size {
+        let split = VirtualArea::new(
+            VirtualRange::new(vma.range.start() + size, vma.range.end()),
+            Flags::NONE,
+        );
+        vma.range = VirtualRange::new(vma.range.start(), vma.range.start() + size);
+
+        // Insert the split vma in the free vma list
+        if let Some(vmas) = free_vmas.get_mut(&split.range.size()) {
+            vmas.push(split);
+        } else {
+            let length = split.range.size();
+            let vmas = alloc::vec![split];
+            free_vmas.insert(length, vmas);
+        }
+    }
+
+    Some(vma)
 }

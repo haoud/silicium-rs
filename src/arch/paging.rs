@@ -91,11 +91,7 @@ pub fn setup() {
         }
     }
 
-    // TODO: Enable the NXE bit in the EFER MSR
-    unsafe {
-        cpu::cr0::set(cpu::cr0::Flags::WP); // Enable the Write Protect bit
-        cpu::cr4::set(cpu::cr4::Flags::PGE); // Enable the Page Global Enable bit
-    }
+    // All flags (NXE, WP...) are already set by Limine, no need to set them again
 }
 
 /// Maps the given physical address to the given virtual address. If the given physical address is
