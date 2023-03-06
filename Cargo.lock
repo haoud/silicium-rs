@@ -51,9 +51,9 @@ checksum = "5e9d0c951056ac044f0e6b09448b9d702f8fb1001db89cffd2bc467bd1c25307"
 
 [[package]]
 name = "linked_list_allocator"
-version = "0.10.4"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e322f259d225fbae43a1b053b2dc6a5968a6bdf8b205f5de684dab485b95030e"
+checksum = "9afa463f5405ee81cdb9cc2baf37e08ec7e4c8209442b5d72c04cfb2cd6e6286"
 dependencies = [
  "spinning_top",
 ]
@@ -125,7 +125,7 @@ dependencies = [
 [[package]]
 name = "silicium-x86_64"
 version = "0.1.0"
-source = "git+https://github.com/haoud/silicium-x86_64#77c03a69748399dd4caa56903940d5720bc4bb0b"
+source = "git+https://github.com/haoud/silicium-x86_64#97a3e9ecb43188be2926949d9e4a0765adc60642"
 dependencies = [
  "bitfield",
  "bitflags",
