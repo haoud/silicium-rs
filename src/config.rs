@@ -3,3 +3,4 @@
 /// much memory for per-cpu data, and should be enough for most use cases.
 pub const MAX_CPU: usize = 32;
 pub const IRQ_BASE: u8 = 32;
+pub const KERNEL_HZ: u64 = 100;

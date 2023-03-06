@@ -1,16 +1,20 @@
 use limine::LimineSmpInfo;
-use x86_64::pic;
+use sync::spin::SpinlockIrq;
+use x86_64::{pic, pit::Pit};
 
-use crate::config;
+use crate::config::{self, KERNEL_HZ};
 
 pub mod acpi;
 pub mod address;
 pub mod exception;
 pub mod gdt;
 pub mod idt;
+pub mod irq;
 pub mod paging;
 pub mod smp;
 pub mod tss;
+
+pub static PIT: SpinlockIrq<Pit> = SpinlockIrq::new(Pit::new(KERNEL_HZ));
 
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {
@@ -33,6 +37,7 @@ pub extern "C" fn _ap_start(info: *const LimineSmpInfo) -> ! {
 
 /// Initialize the BSP
 pub fn init_bsp() {
+    PIT.lock().setup();
     smp::bsp_setup();
     tss::install(0);
     unsafe {

@@ -49,11 +49,12 @@ pub unsafe fn start() -> ! {
         "No SMP information provided by Limine!"
     );
 
-    // Install GDT, IDT and exceptions as soon as possible to be able to handle interrupts
+    // Install GDT, IDT, IRQs, exceptions... as soon as possible to be able to handle interrupts
     arch::gdt::setup();
     arch::idt::setup();
+    arch::irq::setup();
     arch::exception::setup();
-    
+
     // Initialise the memory subsystem
     mm::setup();
 
@@ -67,5 +68,10 @@ pub unsafe fn start() -> ! {
     arch::smp::start_cpus();
 
     info!("Silicium booted successfully!");
-    x86_64::cpu::freeze();
+
+    // Enable interrupts and loop forever
+    loop {
+        x86_64::irq::enable();
+        x86_64::cpu::hlt();
+    }
 }

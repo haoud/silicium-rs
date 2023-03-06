@@ -1,4 +1,7 @@
-use x86_64::{self, lapic::{IpiDestination, IpiPriority, self}};
+use x86_64::{
+    self,
+    lapic::{self, IpiDestination, IpiPriority},
+};
 
 #[cold]
 #[panic_handler]

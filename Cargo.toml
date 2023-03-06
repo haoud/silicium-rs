@@ -2,6 +2,7 @@
 name = "silicium"
 version = "0.1.0"
 edition = "2021"
+license = "MIT / Apache-2.0"
 
 [dependencies]
 x86_64 = { path = "crates/silicium-x86_64", package = "silicium-x86_64", features = ["int_handler"] }
