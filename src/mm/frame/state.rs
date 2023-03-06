@@ -1,13 +1,17 @@
 use crate::arch::address::{phys_to_virt, virt_to_phys};
 use core::mem::size_of;
 use limine::{LimineMemmapEntry, LimineMemoryMapEntryType, NonNullPtr};
-use x86_64::address::{Physical, Virtual};
+use x86_64::{
+    address::{Physical, Virtual},
+    paging::PAGE_SHIFT,
+};
 
 use crate::mm::frame::FrameFlags;
 
 use super::{Frame, Stats};
 
-/// Contains all information needed about a frame
+/// Represents the state of a physical memory frame, and contains information about the frame such
+/// as its flags and its reference count.
 #[derive(Debug, Clone)]
 pub struct FrameInfo {
     flags: FrameFlags,
@@ -134,7 +138,7 @@ impl<'a> State<'a> {
         // will remain poisoned and will not be usable, to prevent any potential issues.
         for (i, frame) in array.iter_mut().enumerate() {
             let mut flags = FrameFlags::POISONED;
-            let addr = (i as u64) << 12;
+            let addr = (i as u64) << PAGE_SHIFT;
             if addr < 0x10_0000 {
                 flags.insert(FrameFlags::BIOS);
             }

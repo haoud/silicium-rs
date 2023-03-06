@@ -3,6 +3,12 @@ use x86_64::paging::PAGE_SIZE;
 
 use super::{AllocationFlags, Frame, FrameFlags, Stats};
 
+/// A dummy allocator that allocates frames from the frame state. This allocator is very inefficient
+/// and should only be used when no other allocator is available. But it could be easily improved,
+/// by saving the last allocated frame index to avoid searching the frame state from the beginning.
+///
+/// For now, the allocator is used as the global allocator, but it will be replaced by a more
+/// efficient allocator in the future, when performance becomes a concern.
 pub struct Allocator {
     statistic: Stats,
 }
@@ -32,27 +38,28 @@ unsafe impl super::Allocator for Allocator {
     unsafe fn allocate(&mut self, flags: super::AllocationFlags) -> Option<Frame> {
         // Acquire the frame state and the frame statistics, the order is important and should be
         // consistent in all functions that use the frame state and the frame statistics.
-        let mut state = crate::mm::FRAME_STATE.lock();
-
-        state
-            .get_state_array_mut()
-            .iter_mut()
-            .find(|frame| frame.get_flags().contains(FrameFlags::FREE))
-            .map(|frame| {
-                self.statistic.allocated += 1;
-                if flags.contains(AllocationFlags::KERNEL) {
-                    frame.get_flags_mut().insert(FrameFlags::KERNEL);
-                    self.statistic.kernel += 1;
-                }
-                if flags.contains(AllocationFlags::ZEROED) {
-                    let frame = phys_to_virt(frame.get_frame().start()).as_mut_ptr::<u8>();
-                    frame.write_bytes(0, PAGE_SIZE);
-                }
-                frame.get_flags_mut().remove(FrameFlags::FREE);
-                frame.retain();
-                frame
-            })
-            .map(|f| *f.get_frame())
+        x86_64::irq::without(|| {
+            let mut state = crate::mm::FRAME_STATE.lock();
+            state
+                .get_state_array_mut()
+                .iter_mut()
+                .find(|frame| frame.get_flags().contains(FrameFlags::FREE))
+                .map(|frame| {
+                    self.statistic.allocated += 1;
+                    if flags.contains(AllocationFlags::KERNEL) {
+                        frame.get_flags_mut().insert(FrameFlags::KERNEL);
+                        self.statistic.kernel += 1;
+                    }
+                    if flags.contains(AllocationFlags::ZEROED) {
+                        let frame = phys_to_virt(frame.get_frame().start()).as_mut_ptr::<u8>();
+                        frame.write_bytes(0, PAGE_SIZE);
+                    }
+                    frame.get_flags_mut().remove(FrameFlags::FREE);
+                    frame.retain();
+                    frame
+                })
+                .map(|f| *f.get_frame())
+        })
     }
 
     /// Allocates a range of free frames from the frame state. Returns `None` if no frame is
@@ -69,39 +76,40 @@ unsafe impl super::Allocator for Allocator {
         count: usize,
         flags: AllocationFlags,
     ) -> Option<super::Range> {
-        // Find `count` contiguous frames that are free
-        let mut state = crate::mm::FRAME_STATE.lock();
+        x86_64::irq::without(|| {
+            // Find `count` contiguous frames that are free
+            let mut state = crate::mm::FRAME_STATE.lock();
+            let len = state.get_state_array().len();
+            let array = state.get_state_array_mut();
+            let mut i = 0;
+            while i + count <= len {
+                if array[i..i + count]
+                    .iter()
+                    .all(|e| e.get_flags().contains(super::FrameFlags::FREE))
+                {
+                    for frame in array[i..i + count].iter_mut() {
+                        self.statistic.allocated += 1;
+                        if flags.contains(AllocationFlags::KERNEL) {
+                            frame.get_flags_mut().insert(FrameFlags::KERNEL);
+                            self.statistic.kernel += 1;
+                        }
+                        if flags.contains(AllocationFlags::ZEROED) {
+                            let frame = phys_to_virt(frame.get_frame().start()).as_mut_ptr::<u8>();
+                            frame.write_bytes(0, PAGE_SIZE);
+                        }
+                        frame.get_flags_mut().remove(FrameFlags::FREE);
+                        frame.retain();
+                    }
 
-        let len = state.get_state_array().len();
-        let array = state.get_state_array_mut();
-        let mut i = 0;
-        while i + count <= len {
-            if array[i..i + count]
-                .iter()
-                .all(|e| e.get_flags().contains(super::FrameFlags::FREE))
-            {
-                for frame in array[i..i + count].iter_mut() {
-                    self.statistic.allocated += 1;
-                    if flags.contains(AllocationFlags::KERNEL) {
-                        frame.get_flags_mut().insert(FrameFlags::KERNEL);
-                        self.statistic.kernel += 1;
-                    }
-                    if flags.contains(AllocationFlags::ZEROED) {
-                        let frame = phys_to_virt(frame.get_frame().start()).as_mut_ptr::<u8>();
-                        frame.write_bytes(0, PAGE_SIZE);
-                    }
-                    frame.get_flags_mut().remove(FrameFlags::FREE);
-                    frame.retain();
+                    return Some(super::Range {
+                        start: *array[i].get_frame(),
+                        end: *array[i + count].get_frame(),
+                    });
                 }
-
-                return Some(super::Range {
-                    start: *array[i].get_frame(),
-                    end: *array[i + count].get_frame(),
-                });
+                i += 1;
             }
-            i += 1;
-        }
-        None
+            None
+        })
     }
 
     /// Reference a frame in the frame state, meaning that the frame is used many times. This method
@@ -115,13 +123,15 @@ unsafe impl super::Allocator for Allocator {
     /// # Panics
     /// This method panics if the frame is not allocated (i.e. if the frame count is 0)
     unsafe fn reference(&mut self, frame: Frame) {
-        let mut state = crate::mm::FRAME_STATE.lock();
-        let frame = state.get_frame_info_mut(frame.start()).unwrap();
-        assert!(
-            frame.get_count() > 0,
-            "Referencing a frame that is not allocated"
-        );
-        frame.retain();
+        x86_64::irq::without(|| {
+            let mut state = crate::mm::FRAME_STATE.lock();
+            let frame = state.get_frame_info_mut(frame.start()).unwrap();
+            assert!(
+                frame.get_count() > 0,
+                "Referencing a frame that is not allocated"
+            );
+            frame.retain();
+        });
     }
 
     /// Free a frame in the frame state. The frame is freed only if the frame count is 0, so you
@@ -137,26 +147,28 @@ unsafe impl super::Allocator for Allocator {
     unsafe fn deallocate(&mut self, frame: Frame) {
         // Acquire the frame state and the frame statistics, the order is important and should be
         // consistent in all functions that use the frame state and the frame statistics.
-        let mut state = crate::mm::FRAME_STATE.lock();
+        x86_64::irq::without(|| {
+            let mut state = crate::mm::FRAME_STATE.lock();
 
-        let frame = state
-            .get_frame_info_mut(frame.start())
-            .expect("Invalid frame address");
+            let frame = state
+                .get_frame_info_mut(frame.start())
+                .expect("Invalid frame address");
 
-        assert!(
-            frame.get_count() != 0,
-            "Physical frame deallocated too many times"
-        );
-        frame.release();
-        if frame.get_count() == 0 {
-            if frame.get_flags().contains(FrameFlags::KERNEL) {
+            assert!(
+                frame.get_count() != 0,
+                "Physical frame deallocated too many times"
+            );
+            frame.release();
+            if frame.get_count() == 0 {
+                if frame.get_flags().contains(FrameFlags::KERNEL) {
+                    frame.get_flags_mut().remove(FrameFlags::KERNEL);
+                    self.statistic.kernel -= 1;
+                }
                 frame.get_flags_mut().remove(FrameFlags::KERNEL);
-                self.statistic.kernel -= 1;
+                frame.get_flags_mut().insert(FrameFlags::FREE);
+                self.statistic.allocated -= 1;
             }
-            frame.get_flags_mut().remove(FrameFlags::KERNEL);
-            frame.get_flags_mut().insert(FrameFlags::FREE);
-            self.statistic.allocated -= 1;
-        }
+        });
     }
 
     /// Free a range of frames in the frame state. The frames are freed only if the frame count is 0,

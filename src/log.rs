@@ -22,10 +22,13 @@ impl log::Log for SiliciumLogger {
                 log::Level::Debug => "\x1b[1m\x1b[34m[#]\x1b[0m",
                 log::Level::Trace => "\x1b[1m[~]\x1b[0m",
             };
-            SERIAL
-                .lock()
-                .write_fmt(format_args!("{} {}\n", level, record.args()))
-                .unwrap();
+
+            x86_64::irq::without(|| {
+                SERIAL
+                    .lock()
+                    .write_fmt(format_args!("{} {}\n", level, record.args()))
+                    .unwrap();
+            });
         }
     }
 

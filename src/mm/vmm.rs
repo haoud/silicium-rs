@@ -51,7 +51,7 @@ pub enum AllocationError {
 }
 
 /// A virtual memory area.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct VirtualArea {
     range: VirtualRange,
     flags: Flags,
@@ -87,7 +87,6 @@ pub fn allocate(size: usize, flags: AllocationFlags) -> Result<VirtualRange, All
     // Align the size to the next multiple of 4096
     let aligned_size = (size.wrapping_add(0xFFF)) & !0xFFF;
     let mut vma = find_free_first_fit(aligned_size).ok_or(AllocationError::OutOfMemory)?;
-    let range = vma.range;
 
     if flags.contains(AllocationFlags::ATOMIC) {
         unimplemented!("Atomic allocation is not implemented yet.");
@@ -95,7 +94,7 @@ pub fn allocate(size: usize, flags: AllocationFlags) -> Result<VirtualRange, All
 
     vma.flags = Flags::from_bits_truncate(flags.bits);
     insert_used_vma(vma);
-    Ok(range)
+    Ok(vma.range)
 }
 
 /// Deallocate a vma. The parameter `base` must be the start of the vma, and therefore should be
@@ -107,8 +106,11 @@ pub fn allocate(size: usize, flags: AllocationFlags) -> Result<VirtualRange, All
 /// - The vma was already deallocated.
 /// - The base address is not the start of the vma.
 pub fn deallocate(range: VirtualRange) {
-    let mut used_vmas = USED_VMA.lock();
-    let vma = used_vmas.remove(&range.start()).unwrap();
+    let vma = x86_64::irq::without(|| {
+        let mut used_vmas = USED_VMA.lock();
+        used_vmas.remove(&range.start()).unwrap()
+    });
+
     if vma.flags.contains(Flags::MAP) {
         // Unmap the range of the vma
         for page in vma.range.iter().step_by(PAGE_SIZE) {
@@ -116,7 +118,9 @@ pub fn deallocate(range: VirtualRange) {
                 let current = &mut *paging::active_table_mut();
                 let frame = paging::unmap(current, page);
                 if let Some(frame) = frame {
-                    FRAME_ALLOCATOR.lock().deallocate(Frame::new(frame));
+                    x86_64::irq::without(|| {
+                        FRAME_ALLOCATOR.lock().deallocate(Frame::new(frame));
+                    });
                 }
             }
         }
@@ -135,12 +139,14 @@ pub fn deallocate(range: VirtualRange) {
 pub fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), PageFaultError> {
     let addr = addr.page_align_down();
     // Find the vma that contains the address
-    let used_vmas = USED_VMA.lock();
-    let vma = used_vmas
-        .iter()
-        .find(|(_, vma)| vma.range.contains(addr))
-        .map(|(_, vma)| vma)
-        .ok_or(PageFaultError::MISSING_PAGE)?;
+    let vma = x86_64::irq::without(|| {
+        let used_vmas = USED_VMA.lock();
+        used_vmas
+            .iter()
+            .find(|(_, vma)| vma.range.contains(addr))
+            .map(|(_, vma)| *vma)
+            .ok_or(PageFaultError::MISSING_PAGE)
+    })?;
 
     if !vma.flags.contains(Flags::MAP) {
         return Err(PageFaultError::NOT_MAPPABLE);
@@ -153,10 +159,12 @@ pub fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), 
         } else {
             frame::AllocationFlags::NONE
         };
-        let frame = FRAME_ALLOCATOR
-            .lock()
-            .allocate(frame_flags)
-            .ok_or(PageFaultError::OUT_OF_MEMORY)?;
+        let frame = x86_64::irq::without(|| {
+            FRAME_ALLOCATOR
+                .lock()
+                .allocate(frame_flags)
+                .ok_or(PageFaultError::OUT_OF_MEMORY)
+        })?;
         trace!(
             "Page fault handler: demand paging: {:016x} -> {:016x}",
             addr,
@@ -174,19 +182,23 @@ pub fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), 
 
 /// Insert a vma in the free vma list.
 fn insert_free_vma(vma: VirtualArea) {
-    let mut free_vmas = FREE_VMA.lock();
-    if let Some(vmas) = free_vmas.get_mut(&vma.range.size()) {
-        vmas.push(vma);
-    } else {
-        let length = vma.range.size();
-        let vmas = alloc::vec![vma];
-        free_vmas.insert(length, vmas);
-    }
+    x86_64::irq::without(|| {
+        let mut free_vmas = FREE_VMA.lock();
+        if let Some(vmas) = free_vmas.get_mut(&vma.range.size()) {
+            vmas.push(vma);
+        } else {
+            let length = vma.range.size();
+            let vmas = alloc::vec![vma];
+            free_vmas.insert(length, vmas);
+        }
+    });
 }
 
 /// Insert a vma in the used vma list.
 fn insert_used_vma(vma: VirtualArea) {
-    USED_VMA.lock().insert(vma.range.start(), vma);
+    x86_64::irq::without(|| {
+        USED_VMA.lock().insert(vma.range.start(), vma);
+    });
 }
 
 /// Find the first free vma that is big enough to allocate the requested size, remove it from

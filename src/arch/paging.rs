@@ -122,10 +122,12 @@ pub unsafe fn map(
 
         // If no frame is given, allocate one
         let frame = if frame.start().is_null() {
-            FRAME_ALLOCATOR
-                .lock()
-                .allocate(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
-                .ok_or(MapError::OutOfMemory)?
+            x86_64::irq::without(|| {
+                FRAME_ALLOCATOR
+                    .lock()
+                    .allocate(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
+                    .ok_or(MapError::OutOfMemory)
+            })?
         } else {
             frame
         };
@@ -293,9 +295,12 @@ unsafe fn creat_and_fetch_pte(
 ) -> Option<&mut PageEntry> {
     let entry = &mut table[at.page_index(level as u64)];
     if !entry.is_present() && level != paging::Level::PageTable {
-        let frame = FRAME_ALLOCATOR
-            .lock()
-            .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)?;
+        let frame = x86_64::irq::without(|| {
+            FRAME_ALLOCATOR
+                .lock()
+                .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)
+        })?;
+
         // Here, we use `PageEntryFlags::WRITABLE` even if the future mapping is not writable.
         // This is because if the `PageEntryFlags::WRITABLE` (and maybe the `PageEntryFlags::USER`)
         // are not set in intermediate page tables, the complete range of the virtual address space
@@ -438,10 +443,12 @@ fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), Page
         // The page fault was caused by a missing page in the heap
         // Allocate a new frame and map it with R/W permissions
         unsafe {
-            let frame = FRAME_ALLOCATOR
-                .lock()
-                .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)
-                .ok_or(PageFaultError::OUT_OF_MEMORY)?;
+            let frame = x86_64::irq::without(|| {
+                FRAME_ALLOCATOR
+                    .lock()
+                    .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)
+                    .ok_or(PageFaultError::OUT_OF_MEMORY)
+            })?;
 
             trace!(
                 "Page fault handler: demand paging: {:016x} -> {:016x}",

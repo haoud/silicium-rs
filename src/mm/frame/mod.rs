@@ -242,6 +242,10 @@ pub unsafe trait Allocator {
     fn statistics(&self) -> Stats;
 }
 
+/// Return the index of the frame containing the given address.
+///
+/// # Panics
+/// Panics if the address is not a valid frame address (see `Physical::new` for more information)
 #[must_use]
 #[allow(clippy::cast_possible_truncation)]
 pub const fn index(address: u64) -> usize {
