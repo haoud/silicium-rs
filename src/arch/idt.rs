@@ -1,9 +1,12 @@
+use crate::arch::acpi::{CLOCK_TICK_VECTOR, TLB_SHOOTDOWN_VECTOR};
 use x86_64::cpu::{Privilege, State};
 use x86_64::idt;
 use x86_64::idt::{Descriptor, DescriptorFlags};
 use x86_64::interrupt_handler;
 
 use crate::Spinlock;
+
+use super::paging;
 
 pub static IDT: Spinlock<idt::Table> = Spinlock::new(idt::Table::new());
 
@@ -12,11 +15,12 @@ pub static IDT: Spinlock<idt::Table> = Spinlock::new(idt::Table::new());
 /// Each interrupt handler must be generated with the [`interrupt_handler!`] macro.
 pub fn setup() {
     let mut idt = IDT.lock();
+    let flags = DescriptorFlags::new()
+        .set_privilege_level(Privilege::KERNEL)
+        .present(true)
+        .build();
+
     for i in 0..idt.capacity() {
-        let flags = DescriptorFlags::new()
-            .set_privilege_level(Privilege::KERNEL)
-            .present(true)
-            .build();
         let descriptor = Descriptor::new()
             .set_handler_addr(unknown_interrupt as usize as u64)
             .set_options(flags)
@@ -26,6 +30,21 @@ pub fn setup() {
             descriptor,
         );
     }
+
+    // Set the TLB shootdown handler
+    let descriptor = Descriptor::new()
+        .set_handler_addr(tlb_shootdown as usize as u64)
+        .set_options(flags)
+        .build();
+    idt.set_descriptor(TLB_SHOOTDOWN_VECTOR, descriptor);
+
+    // Set the clock tick handler
+    let descriptor = Descriptor::new()
+        .set_handler_addr(clock_tick as usize as u64)
+        .set_options(flags)
+        .build();
+    idt.set_descriptor(CLOCK_TICK_VECTOR, descriptor);
+
     idt.load();
 }
 
@@ -42,4 +61,23 @@ pub extern "C" fn unknown_interrupt_handler(_state: State) {
     panic!("Unknown interrupt");
 }
 
+/// Handler for the TLB shootdown interrupt. This interrupt is triggered when a TLB entry must be
+/// invalidated. This function will invalidate all TLB entries on the current CPU by simplicity,
+/// but it should be improved in the future to avoid unnecessary invalidations (and performance
+/// penalties)
+pub extern "C" fn tlb_shootdown_handler(_state: State) {
+    paging::tlb::flush_all();
+}
+
+pub extern "C" fn clock_tick_handler(_state: State) {
+    // Do nothing for now
+}
+
 interrupt_handler!(-1, unknown_interrupt, unknown_interrupt_handler, 0);
+interrupt_handler!(
+    TLB_SHOOTDOWN_VECTOR,
+    tlb_shootdown,
+    tlb_shootdown_handler,
+    0
+);
+interrupt_handler!(CLOCK_TICK_VECTOR, clock_tick, clock_tick_handler, 0);

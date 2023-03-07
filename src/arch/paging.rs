@@ -169,7 +169,7 @@ pub unsafe fn unmap(table: &mut PageTable, at: Virtual) -> Option<Physical> {
             // TODO: Do I really need to disable interrupts here ?
             x86_64::irq::without(|| {
                 pte.clear();
-                tlb::flush_all();
+                tlb::shootdown();
             });
             return Some(Physical::new(addr.as_u64() + offset));
         }
@@ -214,7 +214,7 @@ pub fn change_protection(
             // TODO: Use a lazy TLB invalidation
             x86_64::irq::without(|| {
                 pte.set_flags(flags);
-                tlb::flush_all();
+                tlb::shootdown();
             });
             return Some(old);
         }
@@ -386,7 +386,7 @@ pub fn handle_page_fault(
         // as we have a way to get the page table of the current process
         if present && !code.contains(PageFaultErrorCode::PROTECTION_VIOLATION) {
             trace!("Lazy TLB invalidation at {:016x}", addr.as_u64());
-            tlb::flush_all();
+            tlb::shootdown();
             return Ok(PageFaultType::LazyTlbInvalidation);
         }
     }
@@ -474,16 +474,39 @@ fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), Page
 }
 
 pub mod tlb {
-    use x86_64::cpu;
+    use crate::arch::acpi::TLB_SHOOTDOWN_VECTOR;
+    use x86_64::{
+        cpu,
+        lapic::{self, IpiDestination},
+    };
+
+    /// Flushes the TLB on all cores.
+    pub fn shootdown() {
+        flush_all();
+        if lapic::initialized() {
+            unsafe {
+                lapic::send_ipi(
+                    IpiDestination::OtherCores,
+                    lapic::IpiPriority::Normal,
+                    TLB_SHOOTDOWN_VECTOR,
+                );
+            }
+        }
+    }
 
     /// Flushes the entire TLB. This is done by writing the current value of the CR3 register to it.
     /// This function should be used only when necessary, because the execution after this function
     /// will be slowed, as the number of TLB misses will increase dramatically.
-    ///
-    /// TODO: Send IPI to all other cores to flush their TLB
     pub fn flush_all() {
         unsafe {
             cpu::cr3::reload();
+        }
+    }
+
+    /// Flushes the TLB entry for the page containing the given virtual address.
+    pub fn flush(addr: u64) {
+        unsafe {
+            cpu::invlpg(addr);
         }
     }
 }

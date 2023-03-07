@@ -17,6 +17,9 @@ use x86_64::{
     paging::PAGE_SIZE,
 };
 
+pub const TLB_SHOOTDOWN_VECTOR: u8 = 0xF0;
+pub const CLOCK_TICK_VECTOR: u8 = 0xF1;
+
 #[derive(Debug, Clone, Copy, Hash)]
 struct AcpiHandler {}
 

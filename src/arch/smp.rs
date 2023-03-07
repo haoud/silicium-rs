@@ -54,9 +54,14 @@ pub fn ap_start(smp_info: &LimineSmpInfo) -> ! {
     }
     super::tss::install(smp_info.processor_id as usize);
 
-    // Signal to the BSP that the AP is ready and freeze the core (for now)
+    // Signal to the BSP that the AP is ready, enable interrupts and loop forever
     CPU_COUNT.fetch_add(1, Ordering::Relaxed);
-    x86_64::cpu::freeze();
+    loop {
+        x86_64::irq::enable();
+        unsafe {
+            x86_64::cpu::hlt();
+        }
+    }
 }
 
 /// Start all the APs and wait for them before returning. If an AP fails to start, this function
