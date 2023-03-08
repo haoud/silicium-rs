@@ -1,6 +1,6 @@
 use crate::arch::acpi::{CLOCK_TICK_VECTOR, TLB_SHOOTDOWN_VECTOR};
 use x86_64::cpu::{Privilege, State};
-use x86_64::idt;
+use x86_64::{idt, lapic};
 use x86_64::idt::{Descriptor, DescriptorFlags};
 use x86_64::interrupt_handler;
 
@@ -67,10 +67,11 @@ pub extern "C" fn unknown_interrupt_handler(_state: State) {
 /// penalties)
 pub extern "C" fn tlb_shootdown_handler(_state: State) {
     paging::tlb::flush_all();
+    lapic::send_eoi();
 }
 
 pub extern "C" fn clock_tick_handler(_state: State) {
-    // Do nothing for now
+    lapic::send_eoi();
 }
 
 interrupt_handler!(-1, unknown_interrupt, unknown_interrupt_handler, 0);

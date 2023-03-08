@@ -3,8 +3,12 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
     cpu::Privilege,
     idt::{Descriptor, DescriptorFlags},
-    interrupt_handler, pic,
+    interrupt_handler,
+    lapic::{self, IpiDestination, IpiPriority},
+    pic,
 };
+
+use super::acpi::CLOCK_TICK_VECTOR;
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
 
@@ -47,6 +51,11 @@ pub fn setup() {
 pub extern "C" fn pit_tick_handler(state: x86_64::cpu::State) {
     TICKS.fetch_add(1, Ordering::Relaxed);
     unsafe {
+        lapic::send_ipi(
+            IpiDestination::OtherCores,
+            IpiPriority::Normal,
+            CLOCK_TICK_VECTOR,
+        );
         pic::send_eoi(u8::try_from(state.number).unwrap());
     }
 }

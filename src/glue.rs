@@ -17,7 +17,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     let cpu_id = if EARLY.load(Ordering::Relaxed) {
         0
     } else {
-        arch::smp::get_cpu_id()
+        arch::smp::current_id()
     };
 
     log::error!("CPU {cpu_id} {info}");
