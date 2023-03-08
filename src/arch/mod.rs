@@ -21,6 +21,7 @@ pub static PIT: Spinlock<Pit> = Spinlock::new(Pit::new(KERNEL_HZ));
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {
     core::arch::asm!("xor rbp, rbp"); // Clear the base pointer (useful for backtraces)
+    #[cfg(feature = "log")]
     crate::log::init();
     crate::start();
 }
