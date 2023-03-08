@@ -1,7 +1,11 @@
+use core::sync::atomic::Ordering;
+
 use x86_64::{
     self,
     lapic::{self, IpiDestination, IpiPriority},
 };
+
+use crate::{arch, EARLY};
 
 #[cold]
 #[panic_handler]
@@ -10,7 +14,13 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     // TODO: Dump stack trace
     // TODO: Dump registers
     // TODO: Dump memory
-    log::error!("Panic: {}", info); // Should be safe to use log here
+    let cpu_id = if EARLY.load(Ordering::Relaxed) {
+        0
+    } else {
+        arch::smp::get_cpu_id()
+    };
+
+    log::error!("CPU {cpu_id} {info}");
     log::error!("System halted");
     x86_64::cpu::freeze();
 }

@@ -174,6 +174,7 @@ impl<'a> State<'a> {
                         stats.poisoned -= 1;
                         stats.kernel += 1;
                         stats.usable += 1;
+                        frame.count = 1;
                     }
                     LimineMemoryMapEntryType::BadMemory => (),
                     _ => {

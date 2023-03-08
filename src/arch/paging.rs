@@ -1,9 +1,15 @@
+use core::ops::{Deref, DerefMut};
+use core::ptr::copy_nonoverlapping;
+use core::sync::atomic::Ordering;
+
+use alloc::sync::Arc;
 use bitflags::bitflags;
 use log::trace;
+use spin::Lazy;
 
-use crate::mm;
 use crate::mm::frame::{AllocationFlags, Allocator, Frame};
 use crate::mm::{frame, FRAME_ALLOCATOR, KERNEL_BASE};
+use crate::{mm, Spinlock, EARLY};
 
 use x86_64::address::{Physical, Virtual};
 use x86_64::cpu;
@@ -13,7 +19,7 @@ use x86_64::paging::PageFaultErrorCode;
 use x86_64::paging::PageTable;
 use x86_64::paging::{self, PAGE_MASK};
 
-use super::address::phys_to_virt;
+use super::address::{phys_to_virt, virt_to_phys};
 
 pub type MapFlags = PageEntryFlags;
 
@@ -53,8 +59,139 @@ bitflags! {
 
         /// Set if the demand paging failed because we cannot map the page safely
         const NOT_MAPPABLE = 1 << 6;
+
+        /// Set if the page is already mapped when it should not be
+        const ALREADY_MAPPED = 1 << 7;
     }
 }
+
+/// Represents a root page table (PML4). This is a convenience wrapper around a `PageTable` that
+/// allocates a frame for the table and provides a `Deref` implementation to access the table.
+///
+/// We cannot directly use a `PageTable` to represent a root page table because we need to
+/// allocate a frame for it, to avoid overflowing the stack (by allocating a `PageTable` on the
+/// stack, witch is 4 KiB large) but most importantly because we need to be able to have a fixed
+/// address for the root page table, so that we can load it into the CR3 register without having
+/// fear of it being moved by the compiler/allocator.
+#[derive(Debug)]
+pub struct TableRoot {
+    addr: Virtual,
+    frame: Frame,
+}
+
+impl TableRoot {
+    /// Allocates a new root page table. This create an empty user space, but copy the current
+    /// kernel space (wich is the same for all process).
+    #[must_use]
+    pub fn new() -> Self {
+        let frame = unsafe {
+            FRAME_ALLOCATOR
+                .lock()
+                .allocate(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
+                .unwrap()
+        };
+
+        // Copy the kernel space. We use the `INIT_TABLE` to copy the kernel space, because we have
+        // preallocated all kernel pml4 entries in the `INIT_TABLE`, so we can just copy the
+        // kernel space from there, and avoid locking the `ACTIVE_TABLE` (which should be more
+        // efficient because it is less likely to be used by other threads).
+        unsafe {
+            copy_nonoverlapping(
+                INIT_TABLE.lock().as_ptr().offset(256),
+                frame.start().as_mut_ptr::<PageEntry>().offset(256),
+                256,
+            );
+        }
+
+        Self {
+            addr: phys_to_virt(frame.start()),
+            frame,
+        }
+    }
+
+    /// Creates a new root page table from a physical address that is already mapped.
+    ///
+    /// # Safety
+    /// This function is unsafe because it can lead to undefined behavior if (non-exhaustive list):
+    /// - The physical address dropped before the `TableRoot` is dropped
+    /// - The physical address is not allocated with the frame allocator AND no precautions are
+    ///   taken to ensure that the frame can be deallocated (with `FRAME_ALLOCATOR.lock().deallocate()`)
+    ///   when the `TableRoot` is dropped
+    #[must_use]
+    pub unsafe fn from(phys: Frame) -> Self {
+        Self {
+            addr: phys_to_virt(phys.start()),
+            frame: phys,
+        }
+    }
+}
+
+impl Default for TableRoot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Clone for TableRoot {
+    fn clone(&self) -> Self {
+        let frame = unsafe {
+            FRAME_ALLOCATOR
+                .lock()
+                .allocate(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
+                .expect("Failed to allocate a frame for the pml4 entry")
+        };
+
+        // Copy all the entries
+        unsafe {
+            copy_nonoverlapping(
+                self.frame.start().as_ptr::<PageTable>(),
+                frame.start().as_mut_ptr(),
+                1,
+            );
+        }
+
+        Self {
+            addr: phys_to_virt(frame.start()),
+            frame,
+        }
+    }
+}
+
+impl Deref for TableRoot {
+    type Target = PageTable;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.addr.as_ptr() }
+    }
+}
+
+impl DerefMut for TableRoot {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.addr.as_mut_ptr() }
+    }
+}
+
+impl Drop for TableRoot {
+    fn drop(&mut self) {
+        unsafe { FRAME_ALLOCATOR.lock().deallocate(self.frame) }
+    }
+}
+
+/// Represents the table page when the kernel is loaded with Limine. This simply wrap the boot
+/// pml4 frame into a `TableRoot` to keep a consistent interface.
+pub static INIT_TABLE: Lazy<Arc<Spinlock<TableRoot>>> = Lazy::new(|| unsafe {
+    let boot_pml4 = Frame::new(virt_to_phys(Virtual::new(active_table() as u64)));
+    x86_64::irq::without(|| {
+        FRAME_ALLOCATOR.lock().reference(boot_pml4);
+    });
+    Arc::new(Spinlock::new(TableRoot::from(boot_pml4)))
+});
+
+#[thread_local]
+pub static ACTIVE_TABLE: Lazy<Arc<Spinlock<TableRoot>>> = Lazy::new(|| unsafe {
+    let pml4 = INIT_TABLE.clone();
+    change_table(&pml4.lock());
+    pml4
+});
 
 /// Sets up the pagination system. This function does not many things, as the as most of the work
 /// has been done by Limine. It only preallocate all the kernel pml4 entries and enable the NXE bit
@@ -71,7 +208,7 @@ bitflags! {
 /// kernel pml4 entries and voilà, we have a new empty user address space.
 pub fn setup() {
     // Preallocate all the kernel pml4 entries
-    let table = unsafe { &mut *active_table_mut() };
+    let mut table = ACTIVE_TABLE.lock();
     let start = Virtual::new(KERNEL_BASE).pml4_offset();
     let end = PageTable::COUNT as u64;
 
@@ -92,6 +229,12 @@ pub fn setup() {
     }
 
     // All flags (NXE, WP...) are already set by Limine, no need to set them again
+}
+
+/// Sets up the pagination system for the current CPU. This function is called by the APs when
+/// they are started. It just forces the `ACTIVE_TABLE` lazy static to be initialized.
+pub fn ap_setup() {
+    Lazy::force(&ACTIVE_TABLE);
 }
 
 /// Maps the given physical address to the given virtual address. If the given physical address is
@@ -166,7 +309,6 @@ pub unsafe fn unmap(table: &mut PageTable, at: Virtual) -> Option<Physical> {
             // flush one entry with `invlpg`: do I need to invalidate the mapped virtual
             // address or the virtual address of the page table ?
             // TODO: Only flush one entry of the TLB
-            // TODO: Do I really need to disable interrupts here ?
             x86_64::irq::without(|| {
                 pte.clear();
                 tlb::shootdown();
@@ -210,7 +352,6 @@ pub fn change_protection(
             // flush one entry with `invlpg`: do I need to invalidate the mapped virtual
             // address or the virtual address of the page table ?
             // TODO: Only flush one entry of the TLB
-            // TODO: Do I really need to disable interrupts here ?
             // TODO: Use a lazy TLB invalidation
             x86_64::irq::without(|| {
                 pte.set_flags(flags);
@@ -247,22 +388,8 @@ pub fn translate(table: &PageTable, at: Virtual) -> Option<Physical> {
 /// table is not valid or correctly initialized.
 /// Furthermore, this function is unsafe because the caller must ensure that the given page table
 /// is not dropped before the next page table change.
-pub unsafe fn change_table(table: &PageTable) {
-    cpu::cr3::write(table as *const _ as u64);
-}
-
-/// Returns the current page table.
-///
-/// # Safety
-/// This function is unsafe because it can cause undefined behavior, because the returned page table
-/// is not guaranteed to be always valid . The caller must ensure that the page table is not dropped
-/// while it is used.
-///
-/// TODO: Remove this function ASAP, when process will be implemented
-#[must_use]
-pub unsafe fn active_table_mut() -> *mut PageTable {
-    let addr = cpu::cr3::read() & PAGE_MASK as u64;
-    addr as *mut PageTable
+unsafe fn change_table(table: &TableRoot) {
+    cpu::cr3::write(table.frame.start().as_u64());
 }
 
 /// Returns the current page table.
@@ -272,11 +399,13 @@ pub unsafe fn active_table_mut() -> *mut PageTable {
 /// is not guaranteed to be always valid. The caller must ensure that the page table is not dropped
 /// while it is used.
 ///
-/// TODO: Remove this function ASAP, when process will be implemented
+/// This function should only be used during the initialization of the kernel, when there is no
+/// other way to access the active page table (per-cpu variable are not initialized yet and therefore
+/// it is impossible to use `ACTIVE_TABLE`).
 #[must_use]
-pub unsafe fn active_table() -> *const PageTable {
-    let addr = cpu::cr3::read() & PAGE_MASK as u64;
-    addr as *const PageTable
+unsafe fn active_table() -> *mut PageTable {
+    let addr = Physical::new(cpu::cr3::read() & PAGE_MASK as u64);
+    phys_to_virt(addr).as_mut_ptr()
 }
 
 /// Fetches the page table entry of the given virtual address. If a entry is not present, it is
@@ -365,15 +494,36 @@ unsafe fn fetch_pte_mut(
     None
 }
 
-/// Handles a page fault, and returns the reason of the page fault.
+/// Called when a page fault occurs. This function does almost nothing (the core function for
+/// handling page faults is [`handle_page_fault`]), it simply detect if we are in the early stage
+/// of the kernel initialization and call the right function to fetch the active page table.
 ///
 /// # Errors
-/// Returns a set of flags of [`PageFaultError`] if the page fault cannot be handled.
-pub fn handle_page_fault(
+/// See [`handle_page_fault`] for more information.
+pub fn page_fault(
     code: PageFaultErrorCode,
     addr: Virtual,
 ) -> Result<PageFaultType, PageFaultError> {
-    let table = unsafe { &mut *active_table_mut() };
+    if EARLY.load(Ordering::Relaxed) {
+        let table = unsafe { &mut *active_table() };
+        handle_page_fault(table, code, addr)
+    } else {
+        let mut table = ACTIVE_TABLE.lock();
+        handle_page_fault(&mut table, code, addr)
+    }
+}
+
+/// Handles a page fault. This function is called by [`page_fault`] and does the actual work.
+///
+/// # Errors
+/// This function returns the type of the page fault (see [`PageFaultType`]) if the page fault was
+/// handled successfully. Otherwise, it returns an error (see [`PageFaultError`]) describing the
+/// cause of the error.
+fn handle_page_fault(
+    table: &mut PageTable,
+    code: PageFaultErrorCode,
+    addr: Virtual,
+) -> Result<PageFaultType, PageFaultError> {
     let pte = unsafe { fetch_pte(table, paging::Level::PageMapLevel4, addr) };
     let present = pte.map_or(false, PageEntry::is_present);
     let mut error = PageFaultError::UNKNOWN;
@@ -382,8 +532,6 @@ pub fn handle_page_fault(
         // If it is the case, the error code will specify that the page was not present, but when we
         // will try to fetch the page table entry, it will be marked as present. We juste have to
         // flush the TLB and return.
-        // FIXME: Using fetch_current_table here is unsound, but works for now. Replace it as soon
-        // as we have a way to get the page table of the current process
         if present && !code.contains(PageFaultErrorCode::PROTECTION_VIOLATION) {
             trace!("Lazy TLB invalidation at {:016x}", addr.as_u64());
             tlb::shootdown();
@@ -402,23 +550,14 @@ pub fn handle_page_fault(
 
     // Here, we ran into a unrecoverable page fault. To facilitate debugging, we will compute the
     // reasons of the page fault and return them as an error.
-    // We need to refetch the page table entry to satisfy the borrow checker. This is unsafe, but
-    // in the futur, we will lock the page table while we are handling the page fault, so it will
-    // be safe.
-    // TODO: Do what I have said above
     let pte = unsafe { fetch_pte(table, paging::Level::PageMapLevel4, addr) };
     if code.contains(PageFaultErrorCode::PROTECTION_VIOLATION) {
         if let Some(pte) = pte {
             if !pte.is_writable() && code.contains(PageFaultErrorCode::WRITE_ACCESS) {
-                // The page fault was caused by a write access to a read-only page
                 error |= PageFaultError::WRITE_PROTECTED;
             } else if !pte.is_executable() && code.contains(PageFaultErrorCode::INSTRUCTION_FETCH) {
-                // The page fault was caused by an instruction fetch on a page with
-                // the NX (no execute) bit set
                 error |= PageFaultError::NOT_EXECUTABLE;
             } else {
-                // The page fault was caused by a protection violation (e.g. a user process
-                // trying to access a kernel page)
                 error |= PageFaultError::PROTECTION_VIOLATION;
             }
         }
@@ -440,36 +579,10 @@ pub fn handle_page_fault(
 /// handle it.
 fn handle_demand_paging(table: &mut PageTable, addr: Virtual) -> Result<(), PageFaultError> {
     if addr.as_u64() >= mm::HEAP_START && addr.as_u64() < mm::HEAP_END {
-        // The page fault was caused by a missing page in the heap
-        // Allocate a new frame and map it with R/W permissions
-        unsafe {
-            let frame = x86_64::irq::without(|| {
-                FRAME_ALLOCATOR
-                    .lock()
-                    .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)
-                    .ok_or(PageFaultError::OUT_OF_MEMORY)
-            })?;
-
-            trace!(
-                "Page fault handler: demand paging: {:016x} -> {:016x}",
-                addr,
-                frame.size()
-            );
-
-            map(table, addr, frame, MapFlags::PRESENT | MapFlags::WRITABLE).map_err(
-                |err| match err {
-                    MapError::OutOfMemory => PageFaultError::OUT_OF_MEMORY,
-                    MapError::AlreadyMapped => {
-                        panic!("Page fault handler: page not present, but already mapped !")
-                    }
-                },
-            )?;
-        }
-        return Ok(());
+        return crate::mm::allocator::handle_demand_paging(table, addr);
     } else if addr.as_u64() >= mm::VMALLOC_START && addr.as_u64() < mm::VMALLOC_END {
         return crate::mm::vmm::handle_demand_paging(table, addr);
     }
-
     Err(PageFaultError::UNKNOWN)
 }
 

@@ -4,4 +4,4 @@
 *.bin
 *.sys
 *.elf
-serial.txt
+*.log

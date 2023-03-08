@@ -120,9 +120,10 @@ pub extern "C" fn page_fault_handler(state: State) {
     let code = PageFaultErrorCode::from_bits_truncate(state.code);
     let addr = Virtual::new(x86_64::cpu::cr2::read());
 
-    if let Err(reason) = paging::handle_page_fault(code, addr) {
+    if let Err(reason) = paging::page_fault(code, addr) {
         panic!(
-            "Unrecoverable page fault at {:016x}: {:?}",
+            "Unrecoverable page fault ({:?}) at {:016x}: {:?}",
+            code,
             addr.as_u64(),
             reason
         );

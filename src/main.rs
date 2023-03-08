@@ -15,15 +15,35 @@
 
 extern crate alloc;
 
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use ::log::info;
-use limine::{LimineHhdmRequest, LimineMemmapRequest, LimineRsdpRequest, LimineSmpRequest};
+use limine::{
+    LimineHhdmRequest, LimineMemmapRequest, LimineRsdpRequest, LimineSmpRequest,
+    LimineStackSizeRequest,
+};
 
-use crate::mm::HHDM_START;
-
+/// Request a 128 kio stack for the kernel and the APs. This is absolutely humongous, but it may
+/// be required for unoptimized debug builds and to avoid any stack overflow and strange behaviour.
+pub static LIMINE_STACK_REQUEST: LimineStackSizeRequest =
+    LimineStackSizeRequest::new(0).stack_size(1024 * 128);
 pub static LIMINE_MEMMAP: LimineMemmapRequest = LimineMemmapRequest::new(0);
 pub static LIMINE_HHDM: LimineHhdmRequest = LimineHhdmRequest::new(0);
 pub static LIMINE_RSDP: LimineRsdpRequest = LimineRsdpRequest::new(0);
 pub static LIMINE_SMP: LimineSmpRequest = LimineSmpRequest::new(0);
+
+/// This is used to determine if the kernel is running in early mode or not. This is absolutely
+/// required to avoid any undefined behaviour during the initialization of the kernel, when some
+/// structures are not initialized yet, and trying to access them could lead to a panic.
+///
+/// The best example is the per-cpu variables, which are not initialized when the kernel is
+/// booting and are only initialized after the initialization of the memory manager.
+/// If a per-cpu variable is accessed before it is initialized, the kernel will panic when trying
+/// to dereference a null pointer.
+/// To avoid this, the `EARLY` variable is used to determine if the kernel is running in early mode
+/// and if yes, the per-cpu variables are not accessed and an other method is used instead. For an
+/// concrete example, see the [`crate::arch::paging`] module.
+pub static EARLY: AtomicBool = AtomicBool::new(true);
 
 /// A spinlock type alias. This is used to avoid the confusion between a spinlock (which does not
 /// sleep or yield) and a mutex (which does).
@@ -41,6 +61,10 @@ pub mod mm;
 /// should do the most checks possible, to avoid any undefined behaviour later on.
 pub fn check_around() {
     assert!(
+        LIMINE_STACK_REQUEST.get_response().get().is_some(),
+        "No stack size provided by Limine!"
+    );
+    assert!(
         LIMINE_MEMMAP.get_response().get().is_some(),
         "No memory map provided by Limine!"
     );
@@ -57,7 +81,7 @@ pub fn check_around() {
         "No SMP information provided by Limine!"
     );
     assert!(
-        LIMINE_HHDM.get_response().get().unwrap().offset == HHDM_START,
+        LIMINE_HHDM.get_response().get().unwrap().offset == mm::HHDM_START,
         "High-half direct mapping provided by Limine is not at the expected address!"
     );
 }
@@ -84,9 +108,11 @@ pub unsafe fn start() -> ! {
     // Initialise the APs
     arch::smp::start_cpus();
 
-    info!("Silicium booted successfully!");
+    // Disable early mode and unlock all features of the kernel
+    EARLY.store(false, Ordering::Relaxed);
 
     // Enable interrupts and loop forever
+    info!("Silicium booted successfully!");
     loop {
         x86_64::irq::enable();
         x86_64::cpu::hlt();

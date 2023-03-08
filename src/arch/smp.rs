@@ -53,6 +53,7 @@ pub fn ap_start(smp_info: &LimineSmpInfo) -> ! {
         x86_64::lapic::enable();
     }
     super::tss::install(smp_info.processor_id as usize);
+    super::paging::ap_setup();
 
     // Signal to the BSP that the AP is ready, enable interrupts and loop forever
     CPU_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -92,6 +93,12 @@ pub fn get_cpu_info() -> &'static ThreadLocalInfo {
     // kernel) and the structure is properly initialized. We also only deliver a reference to it,
     // so the caller can't modify it.
     unsafe { &*(msr::read(msr::Register::KernelGsBase) as *const ThreadLocalInfo) }
+}
+
+/// Return the CPU id of the current CPU
+#[must_use]
+pub fn get_cpu_id() -> u32 {
+    get_cpu_info().cpu_id
 }
 
 /// Allocate the thread local storage for the current CPU

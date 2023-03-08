@@ -7,7 +7,7 @@ use x86_64::{
 };
 
 use crate::{
-    arch::paging::{self, map, MapError, MapFlags, PageFaultError},
+    arch::paging::{self, map, MapError, MapFlags, PageFaultError, ACTIVE_TABLE},
     Spinlock,
 };
 
@@ -115,7 +115,7 @@ pub fn deallocate(range: VirtualRange) {
         // Unmap the range of the vma
         for page in vma.range.iter().step_by(PAGE_SIZE) {
             unsafe {
-                let current = &mut *paging::active_table_mut();
+                let current = &mut ACTIVE_TABLE.lock();
                 let frame = paging::unmap(current, page);
                 if let Some(frame) = frame {
                     x86_64::irq::without(|| {

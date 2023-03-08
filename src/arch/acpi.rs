@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     address::virt_to_phys,
-    paging::{self, MapFlags},
+    paging::{self, MapFlags, ACTIVE_TABLE},
 };
 use acpi::{madt::Madt, sdt::Signature};
 use core::ptr::NonNull;
@@ -50,7 +50,7 @@ impl acpi::AcpiHandler for AcpiHandler {
 
         for i in (aligned_phys..(aligned_phys + aligned_size)).step_by(PAGE_SIZE) {
             paging::map(
-                &mut *paging::active_table_mut(),
+                &mut ACTIVE_TABLE.lock(),
                 virt + (i - aligned_phys),
                 Frame::from_u64(i as u64),
                 flags,
@@ -73,7 +73,7 @@ impl acpi::AcpiHandler for AcpiHandler {
 
         for i in (start..end).step_by(PAGE_SIZE) {
             unsafe {
-                paging::unmap(&mut *paging::active_table_mut(), i);
+                paging::unmap(&mut ACTIVE_TABLE.lock(), i);
             }
         }
 
@@ -154,7 +154,7 @@ unsafe fn remap_lapic(base: u64) -> Option<Virtual> {
         .ok()?
         .start();
     paging::map(
-        &mut *paging::active_table_mut(),
+        &mut ACTIVE_TABLE.lock(),
         virt,
         Frame::from_u64(aligned_base),
         flags,

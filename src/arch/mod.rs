@@ -41,6 +41,7 @@ pub extern "C" fn _ap_start(info: *const LimineSmpInfo) -> ! {
 pub fn init_bsp() {
     PIT.lock().setup();
     smp::bsp_setup();
+    paging::setup();
     tss::install(0);
     unsafe {
         pic::remap(config::IRQ_BASE);

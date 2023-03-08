@@ -1,4 +1,4 @@
-use crate::{arch::paging, Spinlock};
+use crate::Spinlock;
 use frame::Allocator;
 
 pub mod allocator;
@@ -46,9 +46,5 @@ pub fn setup() {
         HEAP_ALLOCATOR.lock().init(HEAP_START as *mut u8, HEAP_SIZE);
     }
 
-    // We initialize the paging system here (and not in `arch::init_bsp()`) because we need a
-    // frame allocator to do so. Paging are mostly initialized by Limine when it loads the kernel,
-    // but we need to terminate the initialization here.
-    paging::setup();
     vmm::setup();
 }

@@ -22,3 +22,9 @@ log = "0.4.17"
 name = "silicium"
 test = true
 bench = false
+
+[profile.release]
+codegen-units = 1
+opt-level = 3
+debug = false
+lto = true
