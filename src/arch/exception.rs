@@ -1,10 +1,11 @@
 use crate::arch::paging;
 use x86_64::address::Virtual;
+use x86_64::cpu;
 use x86_64::cpu::Privilege;
 use x86_64::idt::Descriptor;
 use x86_64::idt::DescriptorFlags;
+use x86_64::interrupt_handler;
 use x86_64::paging::PageFaultErrorCode;
-use x86_64::{cpu::State, interrupt_handler};
 
 pub fn setup() {
     register_exception_handler(0, divide_by_zero);
@@ -55,68 +56,68 @@ fn register_exception_handler(index: u8, handler: unsafe extern "C" fn()) {
     idt.set_descriptor(index, descriptor);
 }
 
-pub extern "C" fn divide_by_zero_handler(_state: State) {
+pub extern "C" fn divide_by_zero_handler(_state: &cpu::State) {
     panic!("Divide by zero exception");
 }
 
-pub extern "C" fn debug_handler(_state: State) {
+pub extern "C" fn debug_handler(_state: &cpu::State) {
     panic!("Debug exception");
 }
 
-pub extern "C" fn non_maskable_interrupt_handler(_state: State) {
+pub extern "C" fn non_maskable_interrupt_handler(_state: &cpu::State) {
     // Just freeze the CPU. This is used by the panic function to halt other core.
     // This is a temporary solution, but it works.
     x86_64::cpu::freeze();
 }
 
-pub extern "C" fn breakpoint_handler(_state: State) {
+pub extern "C" fn breakpoint_handler(_state: &cpu::State) {
     panic!("Breakpoint exception");
 }
 
-pub extern "C" fn overflow_handler(_state: State) {
+pub extern "C" fn overflow_handler(_state: &cpu::State) {
     panic!("Overflow exception");
 }
 
-pub extern "C" fn bound_range_exceeded_handler(_state: State) {
+pub extern "C" fn bound_range_exceeded_handler(_state: &cpu::State) {
     panic!("Bound range exceeded exception");
 }
 
-pub extern "C" fn invalid_opcode_handler(_state: State) {
+pub extern "C" fn invalid_opcode_handler(_state: &cpu::State) {
     panic!("Invalid opcode exception");
 }
 
-pub extern "C" fn device_not_available_handler(_state: State) {
+pub extern "C" fn device_not_available_handler(_state: &cpu::State) {
     panic!("Device not available exception");
 }
 
-pub extern "C" fn double_fault_handler(_state: State) {
+pub extern "C" fn double_fault_handler(_state: &cpu::State) {
     panic!("Double fault");
 }
 
-pub extern "C" fn coprocessor_segment_overrun_handler(_state: State) {
+pub extern "C" fn coprocessor_segment_overrun_handler(_state: &cpu::State) {
     panic!("Coprocessor segment overrun exception");
 }
 
-pub extern "C" fn invalid_tss_handler(_state: State) {
+pub extern "C" fn invalid_tss_handler(_state: &cpu::State) {
     panic!("Invalid TSS exception");
 }
 
-pub extern "C" fn segment_not_present_handler(_state: State) {
+pub extern "C" fn segment_not_present_handler(_state: &cpu::State) {
     panic!("Segment not present exception");
 }
 
-pub extern "C" fn stack_segment_fault_handler(_state: State) {
+pub extern "C" fn stack_segment_fault_handler(_state: &cpu::State) {
     panic!("Stack segment fault exception");
 }
 
-pub extern "C" fn general_protection_fault_handler(state: State) {
+pub extern "C" fn general_protection_fault_handler(state: &cpu::State) {
     panic!(
         "General protection fault (error code: 0x{:02x})",
         state.code
     );
 }
 
-pub extern "C" fn page_fault_handler(state: State) {
+pub extern "C" fn page_fault_handler(state: &cpu::State) {
     let code = PageFaultErrorCode::from_bits_truncate(state.code);
     let addr = Virtual::new(x86_64::cpu::cr2::read());
 
@@ -130,43 +131,43 @@ pub extern "C" fn page_fault_handler(state: State) {
     }
 }
 
-pub extern "C" fn reserved_handler(_state: State) {
+pub extern "C" fn reserved_handler(_state: &cpu::State) {
     panic!("Reserved exception");
 }
 
-pub extern "C" fn x87_floating_point_handler(_state: State) {
+pub extern "C" fn x87_floating_point_handler(_state: &cpu::State) {
     panic!("x87 floating point exception");
 }
 
-pub extern "C" fn alignment_check_handler(_state: State) {
+pub extern "C" fn alignment_check_handler(_state: &cpu::State) {
     panic!("Alignment check exception");
 }
 
-pub extern "C" fn machine_check_handler(_state: State) {
+pub extern "C" fn machine_check_handler(_state: &cpu::State) {
     panic!("Machine check exception");
 }
 
-pub extern "C" fn simd_floating_point_handler(_state: State) {
+pub extern "C" fn simd_floating_point_handler(_state: &cpu::State) {
     panic!("SIMD floating point exception");
 }
 
-pub extern "C" fn virtualization_handler(_state: State) {
+pub extern "C" fn virtualization_handler(_state: &cpu::State) {
     panic!("Virtualization exception");
 }
 
-pub extern "C" fn control_protection_handler(_state: State) {
+pub extern "C" fn control_protection_handler(_state: &cpu::State) {
     panic!("Control protection exception");
 }
 
-pub extern "C" fn hypervisor_injection_handler(_state: State) {
+pub extern "C" fn hypervisor_injection_handler(_state: &cpu::State) {
     panic!("Hypervisor injection exception");
 }
 
-pub extern "C" fn vmm_communication_handler(_state: State) {
+pub extern "C" fn vmm_communication_handler(_state: &cpu::State) {
     panic!("Hypervisor injection exception");
 }
 
-pub extern "C" fn security_exception_handler(_state: State) {
+pub extern "C" fn security_exception_handler(_state: &cpu::State) {
     panic!("Security exception");
 }
 

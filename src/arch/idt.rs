@@ -1,8 +1,8 @@
 use crate::arch::acpi::{CLOCK_TICK_VECTOR, TLB_SHOOTDOWN_VECTOR};
 use x86_64::cpu::{Privilege, State};
-use x86_64::{idt, lapic};
 use x86_64::idt::{Descriptor, DescriptorFlags};
 use x86_64::interrupt_handler;
+use x86_64::{idt, lapic};
 
 use crate::Spinlock;
 
