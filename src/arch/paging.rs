@@ -97,7 +97,7 @@ impl TableRoot {
         // efficient because it is less likely to be used by other threads).
         unsafe {
             copy_nonoverlapping(
-                INIT_TABLE.lock().as_ptr().offset(256),
+                INIT_TABLE.as_ptr().offset(256),
                 frame.start().as_mut_ptr::<PageEntry>().offset(256),
                 256,
             );
@@ -178,19 +178,19 @@ impl Drop for TableRoot {
 
 /// Represents the table page when the kernel is loaded with Limine. This simply wrap the boot
 /// pml4 frame into a `TableRoot` to keep a consistent interface.
-pub static INIT_TABLE: Lazy<Arc<Spinlock<TableRoot>>> = Lazy::new(|| unsafe {
+static INIT_TABLE: Lazy<TableRoot> = Lazy::new(|| unsafe {
     let boot_pml4 = Frame::new(virt_to_phys(Virtual::new(active_table() as u64)));
     x86_64::irq::without(|| {
         FRAME_ALLOCATOR.lock().reference(boot_pml4);
     });
-    Arc::new(Spinlock::new(TableRoot::from(boot_pml4)))
+    TableRoot::from(boot_pml4)
 });
 
 #[thread_local]
-pub static ACTIVE_TABLE: Lazy<Arc<Spinlock<TableRoot>>> = Lazy::new(|| unsafe {
+static ACTIVE_TABLE: Lazy<Spinlock<Arc<Spinlock<TableRoot>>>> = Lazy::new(|| unsafe {
     let pml4 = INIT_TABLE.clone();
-    change_table(&pml4.lock());
-    pml4
+    change_table(&pml4);
+    Spinlock::new(Arc::new(Spinlock::new(pml4)))
 });
 
 /// Sets up the pagination system. This function does not many things, as the as most of the work
@@ -208,7 +208,8 @@ pub static ACTIVE_TABLE: Lazy<Arc<Spinlock<TableRoot>>> = Lazy::new(|| unsafe {
 /// kernel pml4 entries and voilà, we have a new empty user address space.
 pub fn setup() {
     // Preallocate all the kernel pml4 entries
-    let mut table = ACTIVE_TABLE.lock();
+    let binding = ACTIVE_TABLE.lock();
+    let mut table = binding.lock();
     let start = Virtual::new(KERNEL_BASE).pml4_offset();
     let end = PageTable::COUNT as u64;
 
@@ -288,6 +289,13 @@ pub unsafe fn map(
     Err(MapError::OutOfMemory)
 }
 
+/// Maps the given physical address to the given virtual address. This function is similar to
+/// `map`, but it uses the active page table instead of the given one.
+#[allow(clippy::missing_errors_doc)]
+pub unsafe fn map_current(at: Virtual, frame: Frame, flags: MapFlags) -> Result<(), MapError> {
+    x86_64::irq::without(|| map(&mut ACTIVE_TABLE.lock().lock(), at, frame, flags))
+}
+
 /// Unmaps the given virtual address and returns the physical address of the unmapped page. If the
 /// given virtual address is not mapped, this function does nothing and returns `None`, otherwise
 /// it returns the physical address of the unmapped page, and it is the responsibility of the caller
@@ -297,6 +305,7 @@ pub unsafe fn map(
 /// This function is unsafe because it can lead to undefined behavior if a page in unmapped while
 /// it is still in use. The caller must ensure that the page is not in use anymore (except if it is
 /// the desired behavior, but this is probably not common.
+#[must_use]
 pub unsafe fn unmap(table: &mut PageTable, at: Virtual) -> Option<Physical> {
     let pte = unsafe { fetch_pte_mut(table, paging::Level::PageMapLevel4, at) };
     if let Some(pte) = pte {
@@ -317,6 +326,13 @@ pub unsafe fn unmap(table: &mut PageTable, at: Virtual) -> Option<Physical> {
         }
     }
     None
+}
+
+/// Unmaps the given virtual address. For more information, see the documentation of the [`unmap`]
+/// function.
+#[must_use]
+pub unsafe fn unmap_current(at: Virtual) -> Option<Physical> {
+    x86_64::irq::without(|| unmap(&mut ACTIVE_TABLE.lock().lock(), at))
 }
 
 /// Returns the protection of the given virtual address. If the given virtual address is not mapped,
@@ -378,6 +394,14 @@ pub fn translate(table: &PageTable, at: Virtual) -> Option<Physical> {
         }
     } else {
         None
+    }
+}
+
+/// Set the current page table to the given one.
+pub fn set_current_table(table: Arc<Spinlock<TableRoot>>) {
+    *ACTIVE_TABLE.lock() = table;
+    unsafe {
+        change_table(&ACTIVE_TABLE.lock().lock());
     }
 }
 
@@ -508,8 +532,7 @@ pub fn page_fault(
         let table = unsafe { &mut *active_table() };
         handle_page_fault(table, code, addr)
     } else {
-        let mut table = ACTIVE_TABLE.lock();
-        handle_page_fault(&mut table, code, addr)
+        x86_64::irq::without(|| handle_page_fault(&mut ACTIVE_TABLE.lock().lock(), code, addr))
     }
 }
 

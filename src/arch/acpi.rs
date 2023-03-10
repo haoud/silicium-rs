@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     address::virt_to_phys,
-    paging::{self, MapFlags, ACTIVE_TABLE},
+    paging::{self, MapFlags},
 };
 use acpi::{madt::Madt, sdt::Signature};
 use core::ptr::NonNull;
@@ -49,13 +49,8 @@ impl acpi::AcpiHandler for AcpiHandler {
             .start();
 
         for i in (aligned_phys..(aligned_phys + aligned_size)).step_by(PAGE_SIZE) {
-            paging::map(
-                &mut ACTIVE_TABLE.lock(),
-                virt + (i - aligned_phys),
-                Frame::from_u64(i as u64),
-                flags,
-            )
-            .unwrap();
+            paging::map_current(virt + (i - aligned_phys), Frame::from_u64(i as u64), flags)
+                .unwrap();
         }
 
         acpi::PhysicalMapping::new(
@@ -73,7 +68,7 @@ impl acpi::AcpiHandler for AcpiHandler {
 
         for i in (start..end).step_by(PAGE_SIZE) {
             unsafe {
-                paging::unmap(&mut ACTIVE_TABLE.lock(), i);
+                _ = paging::unmap_current(i).unwrap();
             }
         }
 
@@ -153,12 +148,6 @@ unsafe fn remap_lapic(base: u64) -> Option<Virtual> {
     let virt = vmm::allocate(PAGE_SIZE, AllocationFlags::NONE)
         .ok()?
         .start();
-    paging::map(
-        &mut ACTIVE_TABLE.lock(),
-        virt,
-        Frame::from_u64(aligned_base),
-        flags,
-    )
-    .ok()?;
+    paging::map_current(virt, Frame::from_u64(aligned_base), flags).ok()?;
     Some(virt + offset)
 }
