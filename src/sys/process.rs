@@ -10,6 +10,8 @@ use core::{
 use hashbrown::HashMap;
 use spin::{Lazy, RwLock};
 
+use super::thread::Tid;
+
 /// A vector to track all the processes in the system
 static PROCESSES: Lazy<RwLock<HashMap<Pid, Arc<Spinlock<Process>>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
@@ -24,11 +26,12 @@ static PIDS_OFFSET: AtomicU64 = AtomicU64::new(0);
 // The number of used PIDs, to avoid searching the whole bitmap when there are no free PIDs
 static PIDS_USED: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Debug)]
 pub struct Process {
     pid: Pid,
     mm: Arc<Spinlock<TableRoot>>,
-    threads: Spinlock<Vec<Thread>>,
     parent: Option<Weak<Spinlock<Process>>>,
+    threads: Spinlock<Vec<Arc<Spinlock<Thread>>>>,
     children: Spinlock<Vec<Arc<Spinlock<Process>>>>,
 }
 
@@ -40,8 +43,9 @@ impl Process {
     }
 
     /// Add a thread to the process
-    pub fn add_thread(&self, thread: Thread) {
-        self.threads.lock().push(thread);
+    pub fn add_thread(&self, mut thread: Thread) {
+        thread.set_parent(Some(&find(self.pid).unwrap()));
+        self.threads.lock().push(Arc::new(Spinlock::new(thread)));
     }
 
     /// Add a child to the process
@@ -49,15 +53,22 @@ impl Process {
         self.children.lock().push(find(child).unwrap());
     }
 
+    /// Remove a thread from the process and drop it
+    pub fn remove_thread(&self, tid: Tid) {
+        self.threads.lock().retain_mut(|t| {
+            let mut t = t.lock();
+            if t.tid() == tid {
+                t.set_parent(None);
+                false
+            } else {
+                true
+            }
+        });
+    }
+
     /// Remove a child from the process
     pub fn remove_child(&self, child: Pid) {
         self.children.lock().retain(|c| c.lock().pid != child);
-    }
-
-    /// Get the list of threads of the process
-    #[must_use]
-    pub const fn threads(&self) -> &Spinlock<Vec<Thread>> {
-        &self.threads
     }
 
     /// Get the memory manager of the process
@@ -118,6 +129,7 @@ impl Drop for Process {
     }
 }
 
+#[derive(Debug)]
 pub struct Builder {
     process: Process,
 }
@@ -136,17 +148,13 @@ impl Builder {
         }
     }
 
-    /// Add a bunch of threads to the process.
-    #[must_use]
-    pub fn add_threads(self, threads: Vec<Thread>) -> Self {
-        self.process.threads.lock().extend(threads);
-        self
-    }
-
     /// Add a thread to the process.
     #[must_use]
     pub fn add_thread(self, thread: Thread) -> Self {
-        self.process.threads.lock().push(thread);
+        self.process
+            .threads
+            .lock()
+            .push(Arc::new(Spinlock::new(thread)));
         self
     }
 
