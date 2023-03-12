@@ -7,7 +7,7 @@ use core::{
 use spin::Lazy;
 use x86_64::{address::VirtualRange, cpu, paging::PAGE_SIZE, segment::Selector};
 
-use crate::{mm::vmm, Spinlock};
+use crate::{arch::paging::TableRoot, mm::vmm, Spinlock};
 
 use super::process::Process;
 
@@ -90,8 +90,8 @@ pub struct Thread {
     cpu_state: cpu::State,
 
     kstack: Option<VirtualRange>,
-    mm: Option<Arc<Spinlock<Process>>>,
-    process: Option<Weak<Spinlock<Process>>>,
+    process: Option<Weak<Process>>,
+    mm: Option<Arc<Spinlock<TableRoot>>>,
 }
 
 impl Thread {
@@ -109,7 +109,7 @@ impl Thread {
     }
 
     /// Set the parent process of the thread.
-    pub fn set_parent(&mut self, parent: Option<&Arc<Spinlock<Process>>>) {
+    pub fn set_parent(&mut self, parent: Option<&Arc<Process>>) {
         self.process = parent.map(Arc::downgrade);
     }
 
@@ -230,7 +230,7 @@ impl Builder {
 
     /// Set the memory manager of the thread.
     #[must_use]
-    pub fn mm(mut self, mm: &Arc<Spinlock<Process>>) -> Self {
+    pub fn mm(mut self, mm: &Arc<Spinlock<TableRoot>>) -> Self {
         self.thread.mm = Some(Arc::clone(mm));
         self
     }
