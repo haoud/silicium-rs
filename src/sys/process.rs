@@ -1,8 +1,5 @@
 use crate::{arch::paging::TableRoot, sys::thread::Thread, Spinlock};
-use alloc::{
-    sync::{Arc, Weak},
-    vec::Vec,
-};
+use alloc::{sync::Arc, vec::Vec};
 use core::{
     intrinsics::size_of,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -13,7 +10,7 @@ use spin::{Lazy, RwLock};
 use super::thread::Tid;
 
 /// A vector to track all the processes in the system
-static PROCESSES: Lazy<RwLock<HashMap<Pid, Arc<Spinlock<Process>>>>> =
+static PROCESSES: Lazy<RwLock<HashMap<Pid, Arc<Process>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// A bitmap to track the PIDs status (free or used)
@@ -30,14 +27,15 @@ static PIDS_USED: AtomicUsize = AtomicUsize::new(0);
 pub struct Process {
     pid: Pid,
     mm: Arc<Spinlock<TableRoot>>,
-    parent: Option<Weak<Spinlock<Process>>>,
+    parent: Spinlock<Option<Pid>>,
+    children: Spinlock<Vec<Arc<Process>>>,
     threads: Spinlock<Vec<Arc<Spinlock<Thread>>>>,
-    children: Spinlock<Vec<Arc<Spinlock<Process>>>>,
 }
 
 impl Process {
     /// Create a builder to create a new process
     #[must_use]
+    
     pub fn builder(&self) -> Builder {
         Builder::new()
     }
@@ -66,9 +64,13 @@ impl Process {
         });
     }
 
+    pub fn set_parent(&self, parent: Option<&Arc<Process>>) {
+        *self.parent.lock() = parent.map(|p| p.pid);
+    }
+
     /// Remove a child from the process
     pub fn remove_child(&self, child: Pid) {
-        self.children.lock().retain(|c| c.lock().pid != child);
+        self.children.lock().retain(|c| c.pid != child);
     }
 
     /// Get the memory manager of the process
@@ -78,34 +80,32 @@ impl Process {
     }
 
     /// Get the list of children of the process
-    pub fn children(&self) -> Vec<Arc<Spinlock<Process>>> {
+    pub fn children(&self) -> Vec<Arc<Process>> {
         self.children.lock().clone()
     }
 
     /// Get a child of the process by its PID. If the child doesn't exist, return `None`, otherwise
     /// return the child.
-    pub fn child(&self, pid: Pid) -> Option<Arc<Spinlock<Process>>> {
+    pub fn child(&self, pid: Pid) -> Option<Arc<Process>> {
         self.children
             .lock()
             .iter()
-            .find(|c| c.lock().pid == pid)
+            .find(|c| c.pid == pid)
             .map(Arc::clone)
     }
 
     /// Get the parent of the process. If the parent doesn't exist, return `None`, otherwise return
     /// the parent.
     #[must_use]
-    pub fn parent(&self) -> Option<&Weak<Spinlock<Process>>> {
-        self.parent.as_ref()
+    pub fn parent(&self) -> Option<Arc<Process>> {
+        self.parent_id().and_then(find)
     }
 
     /// Get the PID of the parent of the process. If the parent doesn't exist, return `None`,
     /// otherwise return the PID of the parent.
     #[must_use]
     pub fn parent_id(&self) -> Option<Pid> {
-        self.parent
-            .as_ref()
-            .map(|p| p.upgrade().unwrap().lock().pid)
+        *self.parent.lock()
     }
 
     /// Get the PID of the process
@@ -120,11 +120,7 @@ impl Drop for Process {
         // Add all the children to the init process, to avoid orphan processes. Therefore, all
         // processes will have a parent, and we can safely use `unwrap` to access the parent every
         // time.
-        let init = find(Pid(1)).unwrap();
-        for child in self.children.lock().drain(..) {
-            init.lock().add_child(child.lock().pid);
-            child.lock().parent = Some(Arc::downgrade(&init));
-        }
+
         self.pid.release();
     }
 }
@@ -139,7 +135,7 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             process: Process {
-                parent: None,
+                parent: Spinlock::new(None),
                 mm: Arc::new(Spinlock::new(TableRoot::new())),
                 pid: Pid::generate().unwrap(),
                 threads: Spinlock::new(Vec::new()),
@@ -160,8 +156,8 @@ impl Builder {
 
     /// Set the parent of the process.
     #[must_use]
-    pub fn parent(mut self, parent: &Arc<Spinlock<Process>>) -> Self {
-        self.process.parent = Some(Arc::downgrade(parent));
+    pub fn parent(mut self, parent: &Arc<Process>) -> Self {
+        self.process.parent = Spinlock::new(Some(parent.pid));
         self
     }
 
@@ -169,7 +165,7 @@ impl Builder {
     pub fn build(self) -> Pid {
         let mut processes = PROCESSES.write();
         let pid = self.process.pid;
-        processes.insert(pid, Arc::new(Spinlock::new(self.process)));
+        processes.insert(pid, Arc::new(self.process));
         pid
     }
 }
@@ -238,12 +234,11 @@ where
     C: FnOnce(&Process) -> R,
 {
     let process = { Arc::clone(PROCESSES.read().get(&pid)?) };
-    let locked = process.lock();
-    Some(closure(&locked))
+    Some(closure(&process))
 }
 
 /// Find a process by its PID and return a Arc to it.
-pub fn find(pid: Pid) -> Option<Arc<Spinlock<Process>>> {
+pub fn find(pid: Pid) -> Option<Arc<Process>> {
     let processes = PROCESSES.read();
     Some(Arc::clone(processes.get(&pid)?))
 }
@@ -257,5 +252,11 @@ pub fn exists(pid: Pid) -> bool {
 /// If this was the last reference to the process, it will be dropped.
 pub fn delete(pid: Pid) {
     let mut processes = PROCESSES.write();
-    processes.remove(&pid);
+    let process = processes.remove(&pid).unwrap();
+
+    let init = find(Pid(1)).unwrap();
+    for child in process.children.lock().drain(..) {
+        child.set_parent(Some(&init));
+        init.add_child(child.pid);
+    }
 }
