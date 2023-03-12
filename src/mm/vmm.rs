@@ -7,7 +7,7 @@ use x86_64::{
 };
 
 use crate::{
-    arch::paging::{self, map, MapError, MapFlags, PageFaultError},
+    arch::paging::{self, map, map_current, MapError, MapFlags, PageFaultError},
     Spinlock,
 };
 
@@ -89,7 +89,45 @@ pub fn allocate(size: usize, flags: AllocationFlags) -> Result<VirtualRange, All
     let mut vma = find_free_first_fit(aligned_size).ok_or(AllocationError::OutOfMemory)?;
 
     if flags.contains(AllocationFlags::ATOMIC) {
-        unimplemented!("Atomic allocation is not implemented yet.");
+        // If the allocation is atomic, we need to allocate all the frames before returning.
+        // This is done by mapping the range of the vma.
+        for page in vma.range.iter().step_by(PAGE_SIZE) {
+            let frame = x86_64::irq::without(|| unsafe {
+                FRAME_ALLOCATOR
+                    .lock()
+                    .allocate(frame::AllocationFlags::KERNEL | frame::AllocationFlags::ZEROED)
+                    .ok_or_else(|| {
+                        // Unmap the pages that were already mapped
+                        for page in vma.range.iter().step_by(PAGE_SIZE) {
+                            if let Some(frame) = paging::unmap_current(page) {
+                                x86_64::irq::without(|| {
+                                    FRAME_ALLOCATOR.lock().deallocate(Frame::new(frame));
+                                });
+                            }
+                        }
+                        AllocationError::WouldBlock
+                    })
+            })?;
+
+            unsafe {
+                map_current(page, frame, MapFlags::PRESENT | MapFlags::WRITABLE).map_err(|e| {
+                    match e {
+                        MapError::OutOfMemory => {
+                            // Unmap the pages that were already mapped
+                            for page in vma.range.iter().step_by(PAGE_SIZE) {
+                                if let Some(frame) = paging::unmap_current(page) {
+                                    x86_64::irq::without(|| {
+                                        FRAME_ALLOCATOR.lock().deallocate(Frame::new(frame));
+                                    });
+                                }
+                            }
+                            AllocationError::OutOfMemory
+                        }
+                        MapError::AlreadyMapped => panic!("vmm: Page already mapped"),
+                    }
+                })?;
+            }
+        }
     }
 
     vma.flags = Flags::from_bits_truncate(flags.bits);

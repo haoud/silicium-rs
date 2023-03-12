@@ -1,4 +1,6 @@
 use crate::arch::acpi::{CLOCK_TICK_VECTOR, TLB_SHOOTDOWN_VECTOR};
+use crate::sys::schedule::{Scheduler, SCHEDULER};
+use crate::sys::thread;
 use x86_64::cpu::{Privilege, State};
 use x86_64::idt::{Descriptor, DescriptorFlags};
 use x86_64::interrupt_handler;
@@ -72,6 +74,14 @@ pub extern "C" fn tlb_shootdown_handler(_state: State) {
 
 pub extern "C" fn clock_tick_handler(_state: State) {
     lapic::send_eoi();
+    SCHEDULER.timer_tick();
+
+    if thread::current().need_rescheduling() {
+        unsafe {
+            log::debug!("Scheduling CPU {}", crate::arch::smp::current_id());
+            SCHEDULER.schedule();
+        }
+    }
 }
 
 interrupt_handler!(-1, unknown_interrupt, unknown_interrupt_handler, 0);

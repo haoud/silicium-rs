@@ -1,6 +1,6 @@
 use core::{
     mem::size_of,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering, AtomicBool},
 };
 
 use limine::LimineSmpInfo;
@@ -8,7 +8,7 @@ use x86_64::{address::Virtual, cpu::msr};
 
 use crate::{
     config::MAX_CPU,
-    mm::vmm::{self, AllocationFlags},
+    mm::vmm::{self, AllocationFlags}, sys,
 };
 
 /// Represent the thread local information for a CPU. This structure is used by the compiler to
@@ -26,6 +26,10 @@ pub struct ThreadLocalInfo {
 /// Represent the number of CPUs that have started. After the initialization of the kernel, this
 /// variable could be used to determine the number of CPUs in the system.
 pub static CPU_COUNT: AtomicU64 = AtomicU64::new(1);
+
+/// A boolean to know if the APs can terminate their initialization. This is used to avoid APs to
+/// start before the BSP has finished its initialization.
+static GO: AtomicBool = AtomicBool::new(false);
 
 /// Allocate the thread local storage for the current CPU. The caller CPU must be the BSP, otherwise
 /// the behavior is undefined.
@@ -57,12 +61,11 @@ pub fn ap_start(smp_info: &LimineSmpInfo) -> ! {
 
     // Signal to the BSP that the AP is ready, enable interrupts and loop forever
     CPU_COUNT.fetch_add(1, Ordering::Relaxed);
-    loop {
-        unsafe {
-            x86_64::irq::enable();
-            x86_64::cpu::hlt();
-        }
+    while !GO.load(Ordering::Relaxed) {
+        core::hint::spin_loop();
     }
+
+    sys::thread::idle();
 }
 
 /// Start all the APs and wait for them before returning. If an AP fails to start, this function
@@ -99,6 +102,11 @@ pub fn get_cpu_info() -> &'static ThreadLocalInfo {
 #[must_use]
 pub fn current_id() -> u32 {
     get_cpu_info().cpu_id
+}
+
+/// Tell the APs that they can finish their initialization
+pub fn go() {
+    GO.store(true, Ordering::Relaxed);
 }
 
 /// Allocate the thread local storage for the current CPU

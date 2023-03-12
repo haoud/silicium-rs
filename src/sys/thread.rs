@@ -4,23 +4,26 @@ use core::{
     intrinsics::size_of,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
-use spin::Lazy;
+use spin::{Lazy, RwLock};
 use x86_64::{address::VirtualRange, cpu, paging::PAGE_SIZE, segment::Selector};
 
 use crate::{arch::paging::TableRoot, mm::vmm, Spinlock};
 
-use super::process::Process;
+use super::{process::{self, Pid, Process}, schedule::{SCHEDULER, Scheduler}};
 
 #[thread_local]
-static CURRENT_THREAD: Lazy<Spinlock<Arc<Spinlock<Thread>>>> = Lazy::new(|| {
-    Spinlock::new(Arc::new(Spinlock::new(
-        Thread::builder()
-            .entry_point(idle as usize)
-            .kstack_size(PAGE_SIZE)
-            .kind(Type::Kernel)
-            .build()
-            .unwrap(),
-    )))
+static CURRENT_THREAD: Lazy<Spinlock<Arc<Thread>>> = Lazy::new(|| {
+    let parent = process::find(Pid::new(0).unwrap()).unwrap();
+    parent.add_thread(Thread::builder()
+    .entry_point(idle as usize)
+    .priority(Priority::Idle)
+    .kstack_size(PAGE_SIZE)
+    .kind(Type::Kernel)
+    .build()
+    .unwrap());
+    let thread = parent.thread(Tid::new(0).unwrap()).unwrap();
+    SCHEDULER.add_thread(Arc::clone(&thread));
+    Spinlock::new(thread)
 });
 
 /// A bitmap to track the TIDs status (free or used)
@@ -41,7 +44,7 @@ pub enum Type {
 }
 
 /// The state of a thread
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     /// The thread is created, but not yet ready to run
     Created,
@@ -65,6 +68,15 @@ pub enum State {
     Zombie,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Priority {
+    Idle,
+    Low,
+    Normal,
+    High,
+    Realtime,
+}
+
 bitflags! {
     /// A set of flags for a thread
     pub struct Flags : u64 {
@@ -82,15 +94,16 @@ bitflags! {
 pub struct Thread {
     tid: Tid,
     kind: Type,
-    flags: Flags,
-    exit_code: Option<i32>,
-    exit_signal: Option<i32>,
+    flags: Spinlock<Flags>,
+    priority: Spinlock<Priority>,
+    exit_code: Spinlock<Option<i32>>,
+    exit_signal: Spinlock<Option<i32>>,
 
-    state: State,
-    cpu_state: cpu::State,
+    state: Spinlock<State>,
+    cpu_state: RwLock<cpu::State>,
 
     kstack: Option<VirtualRange>,
-    process: Option<Weak<Process>>,
+    process: Spinlock<Option<Weak<Process>>>,
     mm: Option<Arc<Spinlock<TableRoot>>>,
 }
 
@@ -109,16 +122,16 @@ impl Thread {
     }
 
     /// Set the parent process of the thread.
-    pub fn set_parent(&mut self, parent: Option<&Arc<Process>>) {
-        self.process = parent.map(Arc::downgrade);
+    pub fn set_parent(&self, parent: Option<&Arc<Process>>) {
+        *self.process.lock() = parent.map(Arc::downgrade);
     }
 
     /// Zombify the thread. This will set the exit code and signal, and will free the memory
     /// associated with the thread (kernel stack, memory manager, etc.)
     pub fn zombify(&mut self, exit_code: i32, exit_signal: i32) {
-        self.exit_signal = Some(exit_signal);
-        self.exit_code = Some(exit_code);
-        self.state = State::Zombie;
+        *self.exit_signal.lock() = Some(exit_signal);
+        *self.exit_code.lock() = Some(exit_code);
+        self.set_state(State::Zombie);
 
         // Drop the memory manager, the kernel stack will
         vmm::deallocate(self.kstack.unwrap());
@@ -126,42 +139,55 @@ impl Thread {
         self.mm = None;
     }
 
-    /// Get a mutable reference to the CPU state of the thread. See `get_cpu_state()` for more
-    /// information.
-    #[must_use]
-    pub fn cpu_state_mut(&mut self) -> &mut cpu::State {
-        &mut self.cpu_state
-    }
-
     /// Get a reference to the CPU state of the thread. This is used to save and restore the CPU
     /// state of the thread. The CPU state is only relevant when the thread is not running.
     #[must_use]
-    pub fn cpu_state(&self) -> &cpu::State {
+    pub fn cpu_state(&self) -> &RwLock<cpu::State> {
         &self.cpu_state
     }
 
     /// Set the reschedule flag for the thread. This will cause the thread to be rescheduled as soon
     /// as possible.
-    pub fn set_need_rescheduling(&mut self) {
-        self.flags |= Flags::NEED_SCHEDULING;
+    pub fn set_need_rescheduling(&self) {
+        *self.flags.lock() |= Flags::NEED_SCHEDULING;
+    }
+
+    /// Clear the reschedule flag for the thread.
+    pub fn clear_need_rescheduling(&self) {
+        *self.flags.lock() &= !Flags::NEED_SCHEDULING;
     }
 
     /// Check if the thread need to be rescheduled.
     #[must_use]
     pub fn need_rescheduling(&self) -> bool {
-        self.flags.contains(Flags::NEED_SCHEDULING)
+        self.flags.lock().contains(Flags::NEED_SCHEDULING)
     }
 
     /// Returns the exit signal of the thread, if any.
     #[must_use]
     pub fn exit_signal(&self) -> Option<i32> {
-        self.exit_signal
+        *self.exit_signal.lock()
     }
 
     /// Returns the exit code of the thread, if any.
     #[must_use]
     pub fn exit_code(&self) -> Option<i32> {
-        self.exit_code
+        *self.exit_code.lock()
+    }
+
+    /// Set the state of the thread.
+    pub fn set_state(&self, state: State) {
+        *self.state.lock() = state;
+    }
+
+    pub fn mm(&self) -> Option<&Arc<Spinlock<TableRoot>>> {
+        self.mm.as_ref()
+    }
+
+    /// Returns the state of the thread.
+    #[must_use]
+    pub fn state(&self) -> State {
+        *self.state.lock()
     }
 
     /// Returns the kind of the thread.
@@ -206,15 +232,16 @@ impl Builder {
         Self {
             thread: Thread {
                 tid: Tid(0),
-                kind: Type::User,
-                flags: Flags::NONE,
-                process: None,
                 mm: None,
                 kstack: None,
-                exit_code: None,
-                exit_signal: None,
-                state: State::Created,
-                cpu_state: cpu::State::default(),
+                kind: Type::User,
+                flags: Spinlock::new(Flags::NONE),
+                process: Spinlock::new(None),
+                exit_code: Spinlock::new(None),
+                exit_signal: Spinlock::new(None),
+                state: Spinlock::new(State::Created),
+                priority: Spinlock::new(Priority::Normal),
+                cpu_state: RwLock::new(cpu::State::default()),
             },
             entry_point: 0,
             kstack_size: 0,
@@ -232,6 +259,14 @@ impl Builder {
     #[must_use]
     pub fn mm(mut self, mm: &Arc<Spinlock<TableRoot>>) -> Self {
         self.thread.mm = Some(Arc::clone(mm));
+        self
+    }
+
+    /// Set the priority of the thread.
+    #[must_use]
+    #[allow(unused_mut)]
+    pub fn priority(mut self, priority: Priority) -> Self {
+        *self.thread.priority.lock() = priority;
         self
     }
 
@@ -268,18 +303,21 @@ impl Builder {
         self.thread.kstack = Some(kstack);
 
         // Set the CPU state
-        self.thread.cpu_state.rip = self.entry_point as u64;
-        match self.thread.kind {
-            Type::User => {
-                self.thread.cpu_state.cs = u64::from(Selector::USER_CODE64.value());
-                self.thread.cpu_state.ss = u64::from(Selector::USER_DATA.value());
-                self.thread.cpu_state.rsp = Thread::USER_STACK_TOP_ALIGNED as u64;
-                todo!(); // Allocate the user stack
-            }
-            Type::Kernel => {
-                self.thread.cpu_state.cs = u64::from(Selector::KERNEL_CODE64.value());
-                self.thread.cpu_state.ss = u64::from(Selector::NULL.value());
-                self.thread.cpu_state.rsp = self.thread.kstack.unwrap().end().as_u64();
+        {
+            let mut cpu_state = self.thread.cpu_state.write();
+            cpu_state.rip = self.entry_point as u64;
+            match self.thread.kind {
+                Type::User => {
+                    cpu_state.cs = u64::from(Selector::USER_CODE64.value());
+                    cpu_state.ss = u64::from(Selector::USER_DATA.value());
+                    cpu_state.rsp = Thread::USER_STACK_TOP_ALIGNED as u64;
+                    todo!(); // Allocate the user stack
+                }
+                Type::Kernel => {
+                    cpu_state.cs = u64::from(Selector::KERNEL_CODE64.value());
+                    cpu_state.ss = u64::from(Selector::NULL.value());
+                    cpu_state.rsp = self.thread.kstack.unwrap().end().as_u64();
+                }
             }
         }
         Ok(self.thread)
@@ -325,10 +363,10 @@ impl Tid {
             let tid = TIDS_OFFSET.fetch_add(1, Ordering::SeqCst) % Self::MAX as u64;
             let index = usize::try_from(tid).unwrap() / size_of::<u64>();
             let off = usize::try_from(tid).unwrap() % size_of::<u64>();
-            let tid = &mut TIDS.lock()[index];
-            if *tid & (1 << off) == 0 {
-                *tid |= 1 << off;
-                return Some(Self(*tid));
+            let x = &mut TIDS.lock()[index];
+            if *x & (1 << off) == 0 {
+                *x |= 1 << off;
+                return Some(Self(tid));
             }
         }
     }
@@ -342,21 +380,23 @@ impl Tid {
     }
 }
 
-/// Set the current thread.
-pub fn set_current(thread: &Arc<Spinlock<Thread>>) {
+/// Set the thread as the current thread, and set its state to `Running`.
+pub fn set_current(thread: &Arc<Thread>) {
     *CURRENT_THREAD.lock() = Arc::clone(thread);
+    thread.set_state(State::Running);
 }
 
 /// Returns the current thread.
-pub fn current() -> Arc<Spinlock<Thread>> {
+pub fn current() -> Arc<Thread> {
     Arc::clone(&*CURRENT_THREAD.lock())
 }
 
 /// The idle thread. It's the thread that is executed when there is no other thread to execute.
-fn idle() -> ! {
+pub fn idle() -> ! {
     x86_64::irq::enable();
     loop {
         unsafe {
+            log::debug!("Idle thread (CPU {})", crate::arch::smp::current_id());
             x86_64::cpu::hlt();
         }
     }

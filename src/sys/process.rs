@@ -29,21 +29,21 @@ pub struct Process {
     mm: Arc<Spinlock<TableRoot>>,
     parent: Spinlock<Option<Pid>>,
     children: Spinlock<Vec<Arc<Process>>>,
-    threads: Spinlock<Vec<Arc<Spinlock<Thread>>>>,
+    threads: Spinlock<Vec<Arc<Thread>>>,
 }
 
 impl Process {
     /// Create a builder to create a new process
     #[must_use]
-    
+
     pub fn builder(&self) -> Builder {
         Builder::new()
     }
 
     /// Add a thread to the process
-    pub fn add_thread(&self, mut thread: Thread) {
+    pub fn add_thread(&self, thread: Thread) {
         thread.set_parent(Some(&find(self.pid).unwrap()));
-        self.threads.lock().push(Arc::new(Spinlock::new(thread)));
+        self.threads.lock().push(Arc::new(thread));
     }
 
     /// Add a child to the process
@@ -51,10 +51,19 @@ impl Process {
         self.children.lock().push(find(child).unwrap());
     }
 
+    // Find a thread in the process by its TID. If the thread doesn't exist, return `None`,
+    // otherwise return the thread.
+    pub fn thread(&self, tid: Tid) -> Option<Arc<Thread>> {
+        self.threads
+            .lock()
+            .iter()
+            .find(|t| t.tid() == tid)
+            .map(Arc::clone)
+    }
+
     /// Remove a thread from the process and drop it
     pub fn remove_thread(&self, tid: Tid) {
         self.threads.lock().retain_mut(|t| {
-            let mut t = t.lock();
             if t.tid() == tid {
                 t.set_parent(None);
                 false
@@ -147,10 +156,7 @@ impl Builder {
     /// Add a thread to the process.
     #[must_use]
     pub fn add_thread(self, thread: Thread) -> Self {
-        self.process
-            .threads
-            .lock()
-            .push(Arc::new(Spinlock::new(thread)));
+        self.process.threads.lock().push(Arc::new(thread));
         self
     }
 
@@ -209,10 +215,10 @@ impl Pid {
             let pid = PIDS_OFFSET.fetch_add(1, Ordering::SeqCst) % Self::MAX as u64;
             let index = usize::try_from(pid).unwrap() / size_of::<u64>();
             let off = usize::try_from(pid).unwrap() % size_of::<u64>();
-            let pid = &mut PIDS.lock()[index];
-            if *pid & (1 << off) == 0 {
-                *pid |= 1 << off;
-                return Some(Self(*pid));
+            let x = &mut PIDS.lock()[index];
+            if *x & (1 << off) == 0 {
+                *x |= 1 << off;
+                return Some(Self(pid));
             }
         }
     }
@@ -259,4 +265,8 @@ pub fn delete(pid: Pid) {
         child.set_parent(Some(&init));
         init.add_child(child.pid);
     }
+}
+
+pub fn setup() {
+    Builder::new().build();
 }

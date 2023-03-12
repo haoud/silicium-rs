@@ -49,14 +49,14 @@ pub fn setup() {
 /// PIC. Because of this, only the BSP can handle IRQs, and interact with the PIC/PIT is slow.
 /// This will be fixed in the future, when the kernel will be more advanced.
 pub extern "C" fn pit_tick_handler(state: &cpu::State) {
-    TICKS.fetch_add(1, Ordering::Relaxed);
     unsafe {
+        pic::send_eoi(u8::try_from(state.number).unwrap());
+        TICKS.fetch_add(1, Ordering::Relaxed);
         lapic::send_ipi(
-            IpiDestination::OtherCores,
+            IpiDestination::AllCores,
             IpiPriority::Normal,
             CLOCK_TICK_VECTOR,
         );
-        pic::send_eoi(u8::try_from(state.number).unwrap());
     }
 }
 
