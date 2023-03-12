@@ -55,6 +55,7 @@ pub mod arch;
 pub mod glue;
 pub mod log;
 pub mod mm;
+pub mod sys;
 
 /// This function performs some checks to ensure that the kernel is running in a valid environment.
 /// This function is called before any other initialization function (except for the logging) and

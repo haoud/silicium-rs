@@ -354,6 +354,7 @@ pub fn protection(table: &mut PageTable, at: Virtual) -> Option<PageEntryFlags> 
 /// # Safety
 /// This function is unsafe because change the protection of a page can lead to undefined behavior
 /// if the page is still in use.
+#[must_use]
 pub fn change_protection(
     table: &mut PageTable,
     at: Virtual,
@@ -379,6 +380,11 @@ pub fn change_protection(
     None
 }
 
+#[must_use]
+pub fn change_protection_current(at: Virtual, flags: PageEntryFlags) -> Option<PageEntryFlags> {
+    x86_64::irq::without(|| change_protection(&mut ACTIVE_TABLE.lock().lock(), at, flags))
+}
+
 /// Translates the given virtual address to a physical address. If the given virtual address is not
 /// mapped, `None` is returned, otherwise it returns the physical address of the given virtual
 #[must_use]
@@ -398,8 +404,8 @@ pub fn translate(table: &PageTable, at: Virtual) -> Option<Physical> {
 }
 
 /// Set the current page table to the given one.
-pub fn set_current_table(table: Arc<Spinlock<TableRoot>>) {
-    *ACTIVE_TABLE.lock() = table;
+pub fn set_current_table(table: &Arc<Spinlock<TableRoot>>) {
+    *ACTIVE_TABLE.lock() = Arc::clone(table);
     unsafe {
         change_table(&ACTIVE_TABLE.lock().lock());
     }
