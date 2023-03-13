@@ -1,16 +1,18 @@
 use core::sync::atomic::Ordering;
 
+use ::log::error;
 use x86_64::{
     self,
     lapic::{self, IpiDestination, IpiPriority},
 };
 
-use crate::{arch, EARLY};
+use crate::{arch, log, EARLY};
 
 #[cold]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     halt_other_core();
+    log::on_panic();
     // TODO: Dump stack trace
     // TODO: Dump registers
     // TODO: Dump memory
@@ -20,8 +22,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         arch::smp::current_id()
     };
 
-    log::error!("CPU {cpu_id} {info}");
-    log::error!("System halted");
+    error!("CPU {cpu_id} {info}");
+    error!("System halted");
     x86_64::cpu::freeze();
 }
 

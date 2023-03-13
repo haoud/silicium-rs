@@ -13,4 +13,4 @@ qemu-system-x86_64 -m 128                                   \
     -no-reboot                                              \
     -no-shutdown                                            \
     -serial stdio                                           \
-    -smp 4
+    -smp 2

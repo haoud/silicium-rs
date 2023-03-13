@@ -13,4 +13,4 @@ qemu-system-x86_64 -daemonize -s -S -m 128                  \
     -no-reboot                                              \
     -no-shutdown                                            \
     -serial file:serial.log                                 \
-    -smp 4
+    -smp 2

@@ -1,6 +1,6 @@
 use core::{
     mem::size_of,
-    sync::atomic::{AtomicU64, Ordering, AtomicBool},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 use limine::LimineSmpInfo;
@@ -8,7 +8,8 @@ use x86_64::{address::Virtual, cpu::msr};
 
 use crate::{
     config::MAX_CPU,
-    mm::vmm::{self, AllocationFlags}, sys,
+    mm::vmm::{self, AllocationFlags},
+    sys,
 };
 
 /// Represent the thread local information for a CPU. This structure is used by the compiler to
@@ -58,14 +59,15 @@ pub fn ap_start(smp_info: &LimineSmpInfo) -> ! {
     }
     super::tss::install(smp_info.processor_id as usize);
     super::paging::ap_setup();
+    sys::thread::setup();
 
-    // Signal to the BSP that the AP is ready, enable interrupts and loop forever
+    // Signal to the BSP that the AP is ready, enable interrupts and wait
+    //  for the BSP to be ready
     CPU_COUNT.fetch_add(1, Ordering::Relaxed);
     while !GO.load(Ordering::Relaxed) {
         core::hint::spin_loop();
     }
-
-    sys::thread::idle();
+    sys::process::run_idle();
 }
 
 /// Start all the APs and wait for them before returning. If an AP fails to start, this function

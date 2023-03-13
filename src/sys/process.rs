@@ -6,8 +6,12 @@ use core::{
 };
 use hashbrown::HashMap;
 use spin::{Lazy, RwLock};
+use x86_64::cpu::State;
 
-use super::thread::Tid;
+use super::{
+    schedule::{Scheduler, SCHEDULER},
+    thread::{self, Tid},
+};
 
 /// A vector to track all the processes in the system
 static PROCESSES: Lazy<RwLock<HashMap<Pid, Arc<Process>>>> =
@@ -42,8 +46,9 @@ impl Process {
 
     /// Add a thread to the process
     pub fn add_thread(&self, thread: Thread) {
-        thread.set_parent(Some(&find(self.pid).unwrap()));
-        self.threads.lock().push(Arc::new(thread));
+        let thread = Arc::new(thread);
+        self.threads.lock().push(Arc::clone(&thread));
+        SCHEDULER.add_thread(thread);
     }
 
     /// Add a child to the process
@@ -153,10 +158,10 @@ impl Builder {
         }
     }
 
-    /// Add a thread to the process.
+    /// Add a thread to the process, and put it in the ready queue.
     #[must_use]
     pub fn add_thread(self, thread: Thread) -> Self {
-        self.process.threads.lock().push(Arc::new(thread));
+        self.process.add_thread(thread);
         self
     }
 
@@ -267,6 +272,69 @@ pub fn delete(pid: Pid) {
     }
 }
 
+unsafe fn a() -> ! {
+    loop {
+        log::info!("A");
+
+    }
+}
+
+unsafe fn b() -> ! {
+    loop {
+        log::info!("B");
+
+     }
+}
+
+unsafe fn c() -> ! {
+    loop {
+        log::info!("C");
+    }
+}
+
 pub fn setup() {
+    // Create the idle process
     Builder::new().build();
+
+    // Create the init process
+    Builder::new()
+        .add_thread(
+            super::thread::Builder::new()
+                .entry_point(a as usize)
+                .kind(thread::Type::Kernel)
+                .build()
+                .unwrap(),
+        )
+        .build();
+
+    Builder::new()
+        .add_thread(
+            super::thread::Builder::new()
+                .entry_point(b as usize)
+                .kind(thread::Type::Kernel)
+                .build()
+                .unwrap(),
+        )
+        .build();
+
+    Builder::new()
+        .add_thread(
+            super::thread::Builder::new()
+                .entry_point(c as usize)
+                .kind(thread::Type::Kernel)
+                .build()
+                .unwrap(),
+        )
+        .build();
+}
+
+pub fn run_idle() -> ! {
+    let mut state = State::default();
+    let idle = thread::current();
+    unsafe {
+        let idle_state = idle.cpu_state().write();
+        idle.cpu_state().force_write_unlock();
+        x86_64::cpu::switch(&mut state, &idle_state);
+        unreachable!();
+    }
 }

@@ -78,7 +78,6 @@ pub extern "C" fn clock_tick_handler(_state: State) {
 
     if thread::current().need_rescheduling() {
         unsafe {
-            log::debug!("Scheduling CPU {}", crate::arch::smp::current_id());
             SCHEDULER.schedule();
         }
     }

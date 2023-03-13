@@ -106,18 +106,18 @@ pub unsafe fn start() -> ! {
     // Setup ACPI and everything related to it (LAPIC, HPET, etc.)
     arch::acpi::setup();
 
-    // Initialise the process subsystem
+    // Initialise the process & thread subsystem
     sys::process::setup();
+    sys::thread::setup();
 
     // Initialise the APs
     arch::smp::start_cpus();
 
     // Disable early mode and unlock all features of the kernel
     EARLY.store(false, Ordering::Relaxed);
-
     info!("Silicium booted successfully!");
 
     // Enable interrupts and loop forever
     arch::smp::go();
-    sys::thread::idle();
+    sys::process::run_idle();
 }

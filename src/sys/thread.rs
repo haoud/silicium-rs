@@ -4,25 +4,28 @@ use core::{
     intrinsics::size_of,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 };
-use spin::{Lazy, RwLock};
-use x86_64::{address::VirtualRange, cpu, paging::PAGE_SIZE, segment::Selector};
+use spin::{Lazy, MutexGuard, RwLock};
+use x86_64::{address::VirtualRange, cpu, segment::Selector};
 
 use crate::{arch::paging::TableRoot, mm::vmm, Spinlock};
 
-use super::{process::{self, Pid, Process}, schedule::{SCHEDULER, Scheduler}};
+use super::process::{self, Pid, Process};
 
 #[thread_local]
 static CURRENT_THREAD: Lazy<Spinlock<Arc<Thread>>> = Lazy::new(|| {
+    let thread = Thread::builder()
+        .entry_point(idle as usize)
+        .priority(Priority::Idle)
+        .kind(Type::Kernel)
+        .build()
+        .unwrap();
+    let tid = thread.tid();
+
     let parent = process::find(Pid::new(0).unwrap()).unwrap();
-    parent.add_thread(Thread::builder()
-    .entry_point(idle as usize)
-    .priority(Priority::Idle)
-    .kstack_size(PAGE_SIZE)
-    .kind(Type::Kernel)
-    .build()
-    .unwrap());
-    let thread = parent.thread(Tid::new(0).unwrap()).unwrap();
-    SCHEDULER.add_thread(Arc::clone(&thread));
+    parent.add_thread(thread);
+
+    let thread = parent.thread(tid).unwrap();
+    thread.set_state(State::Running);
     Spinlock::new(thread)
 });
 
@@ -113,7 +116,7 @@ impl Thread {
     pub const USER_STACK_TOP: usize = 0x0000_7FFF_FFFF_FFFF;
     pub const USER_STACK_SIZE: usize = 8 * 1024 * 1024;
 
-    pub const DEFAULT_KSTACK_SIZE: usize = 32 * 1024;
+    pub const DEFAULT_KSTACK_SIZE: usize = 32 * 1024 * 8;
 
     /// Returns a builder to create a new thread.
     #[must_use]
@@ -184,6 +187,28 @@ impl Thread {
         self.mm.as_ref()
     }
 
+    pub fn state_locked(&self) -> MutexGuard<State> {
+        self.state.lock()
+    }
+
+    pub fn priority(&self) -> Priority {
+        *self.priority.lock()
+    }
+
+    /// Downgrade the state of the thread to ready, only if it is running. If the thread is in
+    /// an another state, this function does nothing.
+    pub fn downgrade_state(&self) {
+        let mut state = self.state.lock();
+        if *state == State::Running {
+            *state = State::Ready;
+        }
+    }
+
+    /// Set the state of the thread to running.
+    pub fn set_running(&self) {
+        *self.state.lock() = State::Running;
+    }
+
     /// Returns the state of the thread.
     #[must_use]
     pub fn state(&self) -> State {
@@ -230,6 +255,7 @@ impl Builder {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            kstack_size: Thread::DEFAULT_KSTACK_SIZE,
             thread: Thread {
                 tid: Tid(0),
                 mm: None,
@@ -244,7 +270,6 @@ impl Builder {
                 cpu_state: RwLock::new(cpu::State::default()),
             },
             entry_point: 0,
-            kstack_size: 0,
         }
     }
 
@@ -315,7 +340,7 @@ impl Builder {
                 }
                 Type::Kernel => {
                     cpu_state.cs = u64::from(Selector::KERNEL_CODE64.value());
-                    cpu_state.ss = u64::from(Selector::NULL.value());
+                    cpu_state.ss = u64::from(Selector::KERNEL_DATA.value());
                     cpu_state.rsp = self.thread.kstack.unwrap().end().as_u64();
                 }
             }
@@ -380,10 +405,20 @@ impl Tid {
     }
 }
 
-/// Set the thread as the current thread, and set its state to `Running`.
+pub fn setup() {
+    Lazy::force(&CURRENT_THREAD);
+}
+
+/// Set the thread as the current thread, and set its state to `Running`. The previous current
+/// thread is set to `Runnable`, only if it was `Running`. If it was in another state (e.g.
+/// `Waiting`, `Zombie`...), it is not changed.
 pub fn set_current(thread: &Arc<Thread>) {
-    *CURRENT_THREAD.lock() = Arc::clone(thread);
-    thread.set_state(State::Running);
+    thread.set_running();
+    x86_64::irq::without(|| {
+        let mut current = CURRENT_THREAD.lock();
+        current.downgrade_state();
+        *current = Arc::clone(thread);
+    });
 }
 
 /// Returns the current thread.
@@ -391,12 +426,13 @@ pub fn current() -> Arc<Thread> {
     Arc::clone(&*CURRENT_THREAD.lock())
 }
 
-/// The idle thread. It's the thread that is executed when there is no other thread to execute.
-pub fn idle() -> ! {
-    x86_64::irq::enable();
-    loop {
-        unsafe {
-            log::debug!("Idle thread (CPU {})", crate::arch::smp::current_id());
+/// The idle thread. It's the thread that is executed when there is no other thread
+/// to execute.
+fn idle() -> ! {
+    // Unlock the CPU state of the idle thread, so it can be modified
+    unsafe {
+        x86_64::irq::enable();
+        loop {
             x86_64::cpu::hlt();
         }
     }

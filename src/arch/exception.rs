@@ -82,8 +82,8 @@ pub extern "C" fn bound_range_exceeded_handler(_state: &cpu::State) {
     panic!("Bound range exceeded exception");
 }
 
-pub extern "C" fn invalid_opcode_handler(_state: &cpu::State) {
-    panic!("Invalid opcode exception");
+pub extern "C" fn invalid_opcode_handler(state: &cpu::State) {
+    panic!("Invalid opcode exception at {:016x}", state.rip);
 }
 
 pub extern "C" fn device_not_available_handler(_state: &cpu::State) {
@@ -123,7 +123,8 @@ pub extern "C" fn page_fault_handler(state: &cpu::State) {
 
     if let Err(reason) = paging::page_fault(code, addr) {
         panic!(
-            "Unrecoverable page fault ({:?}) at {:016x}: {:?}",
+            "[{:016x}] Unrecoverable page fault ({:?}) at {:016x}: {:?}",
+            state.rip,
             code,
             addr.as_u64(),
             reason

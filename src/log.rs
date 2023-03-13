@@ -41,3 +41,10 @@ pub fn init() {
     log::set_max_level(log::LevelFilter::Trace);
     SERIAL.lock().init_com();
 }
+
+#[cold]
+pub fn on_panic() {
+    unsafe {
+        SERIAL.force_unlock();
+    }
+}
